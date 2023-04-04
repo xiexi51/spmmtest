@@ -8,11 +8,44 @@
 #include <random>
 #include <algorithm>
 
-string base_dir = "/home/xiexi/cuda_projects/hpc_data/";
+string base_dir = "/home/xix22010/cuda_projects/hpc_data/";
 // string base_dir = "/home/xiexi/PycharmProjects/pythonProject/graphs/";
 string graph = "artist";
 
 using namespace std;
+
+double check_err(float *out, float *out_ref, int len, bool &has_err)
+{
+    double err_sum = 0;
+    bool show = 1;
+
+    for (int i = 0; i < len; i++)
+    {
+        double err = abs(out[i] - out_ref[i]);
+        err_sum += err;
+        // if (err_sum / (v_num * dim) >= 0.001 && show)
+        // {
+        //     show = 0;
+        //     cout << "fail begin at " << i/32 << endl;
+        // }
+        if (err > 0.01)
+        {
+            has_err = 1;
+        }
+    }
+    cout << "err sum = " << err_sum << "  ";
+    if (err_sum / len < 0.001)
+    // if(!has_err)
+    {
+        cout << "validation pass!" << endl;
+    }
+    else
+    {
+        cout << "validation fail!" << endl;
+    }
+    return err_sum;
+}
+
 int main(int argc, char *argv[])
 {
     int dim = 32;
@@ -28,6 +61,7 @@ int main(int argc, char *argv[])
         graph = arg_graph;
     }
     cout << "dir = " << base_dir << endl;
+    cout << "dim = " << dim << endl;
     int *cu_indptr, *cu_indices, *cu_indptr_new, *cu_indices_new;
 
     int v_num = cuda_read_array(&cu_indptr_new, base_dir + graph + ".new_indptr") - 1;
@@ -37,7 +71,7 @@ int main(int argc, char *argv[])
     cout << "graph = " << graph << " v_num = " << v_num << " e_num = " << e_num << endl;
     float *cu_val;
     cudaMallocManaged(&cu_val, e_num * sizeof(float));
-    
+
     float *cu_vin, *cu_vout, *cu_vout_ref, *cu_vout2, *cu_vout_gnna, *cu_vout_ref_new;
     cudaMallocManaged(&cu_vin, v_num * dim * sizeof(float));
     cudaMallocManaged(&cu_vout, v_num * dim * sizeof(float));
@@ -48,6 +82,7 @@ int main(int argc, char *argv[])
 
     default_random_engine engine;
     engine.seed(123);
+
     uniform_real_distribution<float> rd(0, 1);
 
     if (0)
@@ -57,7 +92,7 @@ int main(int argc, char *argv[])
         generate(cu_vin, cu_vin + v_num * dim, [&]()
                  { return rd(engine); });
     }
-    else if(1)
+    else if (0)
     {
         for (int i = 0; i < e_num; i++)
         {
@@ -69,15 +104,15 @@ int main(int argc, char *argv[])
             cu_vin[i] = 0.01 * i;
         }
     }
-    else if(0){
-    for (int i = 0; i < e_num; i++)
+    else if (1)
+    {
+        for (int i = 0; i < e_num; i++)
         {
             cu_val[i] = 1;
         }
 
-    generate(cu_vin, cu_vin + v_num * dim, [&]()
+        generate(cu_vin, cu_vin + v_num * dim, [&]()
                  { return rd(engine); });
-    
     }
 
     // fill(cu_vin, cu_vin + v_num * dim, 1);
@@ -88,93 +123,46 @@ int main(int argc, char *argv[])
     fill(cu_vout_ref_new, cu_vout_ref_new + v_num * dim, 0);
 
     SPMM_OPT opt(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout, v_num, e_num, dim);
-    // opt.vout_ref = cu_vout_ref;
-
     SPMM_OPT2 opt2(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim);
-
-    SPMM_GNNA gnna(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_gnna, v_num, e_num, dim);
-
-    // spmm_cusparse(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_ref_new, v_num, e_num, dim, 0);
-    // cudaDeviceSynchronize();
-    // spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 0);
-    // cudaDeviceSynchronize();
-
+    SPMM_GNNA gnna(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_gnna, v_num, e_num, dim);
     opt.do_test(false);
-    cudaDeviceSynchronize();
-
-    opt2.do_test(false);
-    cudaDeviceSynchronize();
-
-    gnna.do_test(false);
-    cudaDeviceSynchronize();
-
-
     // for (int i = 0; i < v_num; i++)
     // {
     //     cout << i << endl;
     //     for (int j = 0; j < dim; j++)
     //     {
-    //         cout << cu_vout2[i * dim + j] << " ";
+    //         cout << cu_vout[i * dim + j] << " ";
     //     }
     //     cout << endl;
     // }
+    opt2.do_test(false);
+    gnna.do_test(false);
 
-    float err_sum = 0, err2_sum = 0;
-    bool show = 1;
-    bool has_err = 0, has_err2 = 0;
-    for (int i = 0; i < v_num * dim; i++)
-    {
-        err_sum += abs(cu_vout[i] - cu_vout_ref_new[i]);
-        err2_sum += abs(cu_vout2[i] - cu_vout_ref[i]);
-        // if (err_sum / (v_num * dim) >= 0.001 && show)
-        // {
-        //     show = 0;
-        //     cout << "fail begin at " << i/32 << endl;
-        // }
-        if (abs(cu_vout[i] - cu_vout_ref_new[i]) > 0.01)
-        {
-            has_err = 1;
-        }
-        if (abs(cu_vout2[i] - cu_vout_ref[i]) > 0.01)
-        {
-            has_err2 = 1;
-        }
-    }
-    cout << "err sum = " << err_sum << endl;
-    if (err_sum / (v_num * dim) < 0.001)
-    // if(!has_err)
-    {
-        cout << "validation pass!" << endl;
-    }
-    else
-    {
-        cout << "validation fail!" << endl;
-    }
-    cout << "err2 sum = " << err2_sum << endl;
-    if (err2_sum / (v_num * dim) < 0.001)
-    // if(!has_err)
-    {
-        cout << "validation2 pass!" << endl;
-    }
-    else
-    {
-        cout << "validation2 fail!" << endl;
-    }
+    spmm_cusparse(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_ref_new, v_num, e_num, dim, 0);
+    spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 0);
 
-    if (false)
-    {
+    bool has_err = 0;
+    cout << "checking opt" << endl;
+    check_err(cu_vout, cu_vout_ref_new, v_num * dim, has_err);
+    cout << "checking opt2" << endl;
+    check_err(cu_vout2, cu_vout_ref, v_num * dim, has_err);
+    cout << "checking gnna" << endl;
+    check_err(cu_vout_gnna, cu_vout_ref, v_num * dim, has_err);
     
-        // double t_cusparse = spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 10);
-        // cout << "cusparse time = " << t_cusparse * 1000 << endl;
+
+    if (true)
+    {
+        double t_cusparse = spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 10);
+        cout << "cusparse time = " << t_cusparse * 1000 << endl;
 
         double t_opt = opt.do_test(true);
         cout << "opt time = " << t_opt * 1000 << endl;
 
-        // double t_opt2 = opt2.do_test(true);
-        // cout << "opt2 time = " << t_opt2 * 1000 << endl;
+        double t_opt2 = opt2.do_test(true);
+        cout << "opt2 time = " << t_opt2 * 1000 << endl;
 
-        // double t_gnna = gnna.do_test(true);
-        // cout << "gnna time = " << t_gnna * 1000 << endl;
+        double t_gnna = gnna.do_test(true);
+        cout << "gnna time = " << t_gnna * 1000 << endl;
     }
 
     cudaFree(cu_indptr);

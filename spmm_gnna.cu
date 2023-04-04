@@ -151,7 +151,7 @@ double SPMM_GNNA::do_test(bool timing)
     vector<int> indptr_vec((int*)ptr, (int*)ptr + num_v + 1);
     vector<vector<int>> parts = build_part(partSize, indptr_vec);
 
-    warpPerBlock = 8;
+    warpPerBlock = 12;
     num_parts = parts[1].size();
     block = warpPerBlock * WARPSIZE;
     grid = (num_parts * WARPSIZE + block - 1) / block;
