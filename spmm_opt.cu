@@ -11,20 +11,33 @@ extern string base_dir, graph;
 const int DEG_BOUND = 12 * 32;
 const int WARPS_PER_BLOCK = 12;
 
-__global__ void spmm_kernel_opt(int *_block4, int *coo_row, int *idx, float *val, float *vin, float *vout, int num_v, int num_e, int feat_in, float *vout_ref)
+#define DIM_MUL(x) ((x + 31) / 32) * 32
+
+__global__ void spmm_kernel_opt(const int *_block4, const int *coo_row, const int *idx, const float *val, const float *vin, float *vout, const int num_v, const int num_e, const int feat_in, const float *vout_ref)
 {
-    int4 *block4 = reinterpret_cast<int4 *>(_block4);
+    // CONSTINT round_dim = DIM_MUL(feat_in);
+    // CONSTINT wid = threadIdx.x / round_dim;
+    // CONSTINT lane_id = threadIdx.x % round_dim;
+    CONSTINT wid = threadIdx.x / 32;
+    CONSTINT lane_id = threadIdx.x & 31;
+
+    // #define round_dim blockDim.x
+    // #define lane_id threadIdx.x
+    // #define wid threadIdx.y
+
+    if(blockIdx.y * 32 + lane_id >= feat_in){
+        return;
+    }
+    // CONSTINT tid = wid * round_dim + lane_id;
+    #define tid threadIdx.x
+
+    const int4 *block4 = reinterpret_cast<const int4 *>(_block4);
     const int4 b_info = block4[blockIdx.x];
 
     CONSTINT block_degree = b_info.x;
     CONSTINT block_row_begin = b_info.y;
     CONSTINT block_loc_begin = b_info.z;
     CONSTINT block_info = b_info.w;
-
-    CONSTINT wid = threadIdx.x / 32;
-    CONSTINT lane_id = threadIdx.x & 31;
-
-    extern __shared__ float out_cache[];
 
     CONSTINT n_rows = block_degree <= DEG_BOUND ? block_info & 65535 : 1;
     CONSTINT w_nz = block_degree <= DEG_BOUND ? block_info >> 16 : DEG_BOUND / WARPS_PER_BLOCK;
@@ -39,6 +52,8 @@ __global__ void spmm_kernel_opt(int *_block4, int *coo_row, int *idx, float *val
         return;
     }
 
+    __shared__ float out_cache[(WARPS_PER_BLOCK + WARPS_PER_BLOCK / 2) * 32 * sizeof(float)];
+
 #pragma unroll
     for (int i = 0; i < w_nz; i++)
     {
@@ -48,66 +63,33 @@ __global__ void spmm_kernel_opt(int *_block4, int *coo_row, int *idx, float *val
         }
         if (i == 0)
         {
-            for (int j = 0; j < feat_in / 32; j++)
+            out_cache[tid] = 0;
+            if (warps_per_row > 1 && wid < n_rows)
             {
-                out_cache[wid * feat_in + j * 32 + lane_id] = 0;
-                if (warps_per_row > 1 && wid < n_rows)
-                {
-                    out_cache[(wid + WARPS_PER_BLOCK) * feat_in + j * 32 + lane_id] = 0;
-                }
+                out_cache[(wid + WARPS_PER_BLOCK) * 32 + lane_id] = 0;
             }
+            
             __syncwarp();
         }
         const int nz_loc = block_loc_begin + warp_loc_row * row_nz + i + warp_loc_col;
         const float left_val = __ldg(val + nz_loc);
-
-        // int in_base = __ldg(idx + nz_loc) * feat_in + lane_id;
-        // int out_base = wid * feat_in + lane_id;
-
-        // float right_val = vin[in_base + 0 * 32];
-        // out_cache[out_base + 0 * 32] += left_val * right_val;
-
-        // if (feat_in > 32)
-        // {
-        //     right_val = vin[in_base + 1 * 32];
-        //     out_cache[out_base + 1 * 32] += left_val * right_val;
-        //     if (feat_in > 64)
-        //     {
-        //         right_val = vin[in_base + 2 * 32];
-        //         out_cache[out_base + 2 * 32] += left_val * right_val;
-        //         if (feat_in > 96)
-        //         {
-        //             right_val = vin[in_base + 3 * 32];
-        //             out_cache[out_base + 3 * 32] += left_val * right_val;
-        //             if (feat_in > 128)
-        //             {
-        //             }
-        //         }
-        //     }
-        // }
-
-        
 
         // out_cache[wid * feat_in + j * 32 + lane_id] += right_val;
 
         // int in_base = ;
         // int out_base = ;
         
-        for (int j = 0; j < feat_in / 32; j++){
-            float right_val =  vin[__ldg(idx + nz_loc) * feat_in + lane_id + j * 32];
-            out_cache[wid * feat_in + lane_id + j * 32] += left_val * right_val;
-            // out_cache[wid * feat_in + lane_id + j * 32] += right_val;
-        }
+        float right_val =  vin[__ldg(idx + nz_loc) * 32 * gridDim.y + blockIdx.y * 32 + lane_id];
+        out_cache[tid] += left_val * right_val;
+        // out_cache[wid * feat_in + lane_id + j * 32] += right_val;
+        
     }
 
     // atomicAdd(&vout[(block_row_begin + warp_loc_row) * feat_in + lane_id], out_cache[wid * 32 + lane_id]);
 
     if (warps_per_row > 1)
     {
-        for (int j = 0; j < feat_in / 32; j++)
-        {
-            atomicAdd_block(&out_cache[(warp_loc_row + WARPS_PER_BLOCK) * feat_in + j * 32 + lane_id], out_cache[wid * feat_in + j * 32 + lane_id]);
-        }
+        atomicAdd_block(&out_cache[(warp_loc_row + WARPS_PER_BLOCK) * 32 + lane_id], out_cache[tid]);
         __syncthreads();
         if (wid < n_rows)
         {
@@ -115,43 +97,38 @@ __global__ void spmm_kernel_opt(int *_block4, int *coo_row, int *idx, float *val
             //     ;
             // }
 
-            for (int j = 0; j < feat_in / 32; j++)
+            
+            if (block_degree <= DEG_BOUND)
             {
-                if (block_degree <= DEG_BOUND)
-                {
-                    vout[(block_row_begin + wid) * feat_in + j * 32 + lane_id] = out_cache[(wid + WARPS_PER_BLOCK) * feat_in + j * 32 + lane_id];
-                }
-                else
-                {
-                    atomicAdd(&vout[(block_row_begin + wid) * feat_in + j * 32 + lane_id], out_cache[(wid + WARPS_PER_BLOCK) * feat_in + j * 32 + lane_id]);
-                }
+                vout[(block_row_begin + wid) * 32 * gridDim.y + blockIdx.y * 32 + lane_id] = out_cache[(wid + WARPS_PER_BLOCK) * 32 + lane_id];
             }
+            else
+            {
+                atomicAdd(&vout[(block_row_begin + wid) * 32 * gridDim.y + blockIdx.y * 32 + lane_id], out_cache[(wid + WARPS_PER_BLOCK) * 32 + lane_id]);
+            }
+            
         }
     }
     else
     {
-#pragma unroll
-        for (int j = 0; j < feat_in / 32; j++)
+        if (block_degree <= DEG_BOUND)
         {
 
-            if (block_degree <= DEG_BOUND)
-            {
-
-                vout[(block_row_begin + wid) * feat_in + j * 32 + lane_id] = out_cache[wid * feat_in + j * 32 + lane_id];
-            }
-
-            else if(1)
-            {
-
-                atomicAdd(&vout[(block_row_begin + wid) * feat_in + j * 32 + lane_id], out_cache[wid * feat_in + j * 32 + lane_id]);
-            }
+            vout[(block_row_begin + wid) * 32 * gridDim.y + blockIdx.y * 32 + lane_id] = out_cache[tid];
         }
+
+        else
+        {
+            atomicAdd(&vout[(block_row_begin + wid) * 32 * gridDim.y + blockIdx.y * 32 + lane_id], out_cache[tid]);
+        }
+    
     }
 }
 
 void SPMM_OPT::run()
 {
-    spmm_kernel_opt<<<grid, block, (WARPS_PER_BLOCK + WARPS_PER_BLOCK / 2) * dim * sizeof(float)>>>(_block4, 0, idx, val, vin, vout, num_v, num_e, dim, 0);
+    // int shared_size = (WARPS_PER_BLOCK + WARPS_PER_BLOCK / 2) * DIM_MUL(dim) * sizeof(float);
+    spmm_kernel_opt<<<grid, block>>>(_block4, 0, idx, val, vin, vout, num_v, num_e, dim, 0);
 }
 
 double SPMM_OPT::do_test(bool timing)
@@ -166,13 +143,16 @@ double SPMM_OPT::do_test(bool timing)
     //     }
     // }
 
-    int block_num = cuda_read_array(&this->_block4, "/home/xix22010/py_projects/graph_preprocess/block_4/" + graph + ".block4") / 4;
+    int block_num = cuda_read_array(&this->_block4, "/home/xi/py_projects/graph_preprocess/block_4/" + graph + ".block4") / 4;
     if (!timing)
     {
         cout << "block num = " << block_num << endl;
     }
 
     grid.x = block_num;
+    grid.y = (dim + 31) / 32;
+    // block.x = DIM_MUL(dim);
+    // block.y = WARPS_PER_BLOCK;
     block.x = WARPS_PER_BLOCK * 32;
 
     double ret = timing_body(timing);

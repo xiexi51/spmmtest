@@ -8,7 +8,7 @@
 #include <random>
 #include <algorithm>
 
-string base_dir = "/home/xix22010/cuda_projects/hpc_data/";
+string base_dir = "/home/xi/cuda_projects/hpc_data/";
 // string base_dir = "/home/xiexi/PycharmProjects/pythonProject/graphs/";
 string graph = "artist";
 
