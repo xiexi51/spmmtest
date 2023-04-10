@@ -113,7 +113,6 @@ __global__ void spmm_kernel_opt(const int *_block4, const int *coo_row, const in
 
             else
             {
-
                 atomicAdd(&vout[(block_row_begin + wid) * feat_in + lane_id], out_cache[tid]);
             }
         }
@@ -146,6 +145,9 @@ double SPMM_OPT::do_test(bool timing)
     }
 
     grid.x = block_num;
+
+    // block.x = DIM_MUL(dim);
+    // block.y = WARPS_PER_BLOCK;
     block.x = WARPS_PER_BLOCK * 32;
 
     double ret = timing_body(timing);
