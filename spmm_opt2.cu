@@ -10,17 +10,17 @@ extern string base_dir, graph;
 
 const int WARPS_PER_BLOCK = 12;
 
-__global__ void spmm_kernel_opt2(int *_warp4, int *idx, float *val, float *vin, float *vout, int num_v, int num_e, int feat_in, int num_warps)
+__global__ void spmm_kernel_opt2(const int *_warp4, int *idx, float *val, float *vin, float *vout, int num_v, int num_e, const int feat_in, int num_warps)
 {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x; // global thread-id
-    const int warpid = tid / 32;                     // global warp-id
-    const int block_warpid = threadIdx.x / 32;       // block warp-id
-    const int laneid = threadIdx.x % 32;             // warp thread-id -- laneid
+    const int warpid = tid / 32;                           // global warp-id
+    const int block_warpid = threadIdx.x / 32;             // block warp-id
+    const int laneid = threadIdx.x % 32;                   // warp thread-id -- laneid
 
-    if(warpid >= num_warps)
+    if (warpid >= num_warps)
         return;
 
-    int4 *warp4 = reinterpret_cast<int4 *>(_warp4);
+    const int4 *warp4 = reinterpret_cast<const int4 *>(_warp4);
     const int4 w_info = warp4[warpid];
 
     CONSTINT warp_row = w_info.x;
@@ -30,28 +30,28 @@ __global__ void spmm_kernel_opt2(int *_warp4, int *idx, float *val, float *vin, 
     extern __shared__ float out_cache[];
 
 #pragma unroll
-    for (int i = 0; i < warp_len; i++)
+    for (int j = 0; j < feat_in / 32; j++)
     {
-        if (i == 0)
-        {
-            for (int j = 0; j < feat_in / 32; j++){
-                out_cache[block_warpid * feat_in + j * 32 + laneid] = 0;
-            }
-            __syncwarp();
-        }
-        const int nz_loc = warp_loc + i;
-        const float left_val = val[nz_loc];
+
 #pragma unroll
-        for (int j = 0; j < feat_in / 32; j++){
+        for (int i = 0; i < warp_len; i++)
+        {
+            if (i == 0)
+            {
+
+                out_cache[block_warpid * feat_in + j * 32 + laneid] = 0;
+
+                __syncwarp();
+            }
+            const int nz_loc = warp_loc + i;
+            const float left_val = val[nz_loc];
+
             const float right_val = vin[idx[nz_loc] * feat_in + j * 32 + laneid];
             out_cache[block_warpid * feat_in + j * 32 + laneid] += left_val * right_val;
         }
-    }
-    #pragma unroll
-    for (int j = 0; j < feat_in / 32; j++){
+
         atomicAdd(&vout[warp_row * feat_in + j * 32 + laneid], out_cache[block_warpid * feat_in + j * 32 + laneid]);
     }
-
 }
 
 void SPMM_OPT2::run()

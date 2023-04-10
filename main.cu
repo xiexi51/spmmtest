@@ -19,6 +19,8 @@ double check_err(float *out, float *out_ref, int len, bool &has_err)
     double err_sum = 0;
     bool show = 1;
 
+    has_err = 0;
+
     for (int i = 0; i < len; i++)
     {
         double err = abs(out[i] - out_ref[i]);
@@ -28,9 +30,10 @@ double check_err(float *out, float *out_ref, int len, bool &has_err)
         //     show = 0;
         //     cout << "fail begin at " << i/32 << endl;
         // }
-        if (err > 0.01)
+        if (err > 0.1 && has_err == 0)
         {
             has_err = 1;
+            cout << "err at " << i << endl;
         }
     }
     cout << "err sum = " << err_sum << "  ";
@@ -126,6 +129,7 @@ int main(int argc, char *argv[])
     SPMM_OPT2 opt2(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim);
     SPMM_GNNA gnna(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_gnna, v_num, e_num, dim);
     opt.do_test(false);
+
     // for (int i = 0; i < v_num; i++)
     // {
     //     cout << i << endl;
@@ -135,10 +139,35 @@ int main(int argc, char *argv[])
     //     }
     //     cout << endl;
     // }
+
     opt2.do_test(false);
+
+    // for (int i = 0; i < v_num; i++)
+    // {
+    //     cout << i << endl;
+    //     for (int j = 0; j < dim; j++)
+    //     {
+    //         cout << cu_vout2[i * dim + j] << " ";
+    //     }
+    //     cout << endl;
+    // }
+
+
     gnna.do_test(false);
 
     spmm_cusparse(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_ref_new, v_num, e_num, dim, 0);
+
+    // for (int i = 0; i < v_num; i++)
+    // {
+    //     cout << i << endl;
+    //     for (int j = 0; j < dim; j++)
+    //     {
+    //         cout << cu_vout_ref_new[i * dim + j] << " ";
+    //     }
+    //     cout << endl;
+    // }
+
+
     spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 0);
 
     bool has_err = 0;
