@@ -30,17 +30,19 @@ __global__ void spmm_kernel_opt(const int *_block4, const int *coo_row, const in
     extern __shared__ float out_cache[];
     CONSTINT round_dim = DIM_MUL(feat_in);
     // CONSTINT round_dim = feat_in;
+    CONSTINT lane_id = threadIdx.x % round_dim;
+    if (lane_id >= feat_in)
+    {
+        return;
+    }
+    CONSTINT warps_per_row = (row_nz + w_nz - 1) / w_nz;
 
 #pragma unroll
     for (int ext = 0; ext < (feat_in + 31) / 32; ext++)
     {
         CONSTINT wid = (threadIdx.x + ext * blockDim.x) / round_dim;
-        CONSTINT lane_id = (threadIdx.x + ext * blockDim.x) % round_dim;
-        if (lane_id >= feat_in)
-        {
-            return;
-        }
-        CONSTINT warps_per_row = (row_nz + w_nz - 1) / w_nz;
+        CONSTINT tid = wid * round_dim + lane_id;
+        
         CONSTINT warp_loc_row = wid / warps_per_row;
         CONSTINT warp_loc_col = wid % warps_per_row * w_nz;
 
@@ -58,7 +60,7 @@ __global__ void spmm_kernel_opt(const int *_block4, const int *coo_row, const in
             }
             if (i == 0)
             {
-                out_cache[wid * round_dim + lane_id] = 0;
+                out_cache[tid] = 0;
                 // if (warps_per_row > 1 && wid < n_rows)
                 // {
                 //     out_cache[(wid + WARPS_PER_BLOCK) * round_dim + lane_id] = 0;
@@ -70,7 +72,7 @@ __global__ void spmm_kernel_opt(const int *_block4, const int *coo_row, const in
             const float left_val = __ldg(val + nz_loc);
 
             float right_val = vin[__ldg(idx + nz_loc) * feat_in + lane_id];
-            out_cache[wid * round_dim + lane_id] += left_val * right_val;
+            out_cache[tid] += left_val * right_val;
             // out_cache[wid * feat_in + lane_id + j * 32] += right_val;
         }
 
@@ -78,7 +80,7 @@ __global__ void spmm_kernel_opt(const int *_block4, const int *coo_row, const in
         
         if (warps_per_row > 1)
         {
-            atomicAdd(&vout[(block_row_begin + warp_loc_row) * feat_in + lane_id], out_cache[wid * round_dim + lane_id]);
+            atomicAdd(&vout[(block_row_begin + warp_loc_row) * feat_in + lane_id], out_cache[tid]);
             // atomicAdd_block(&out_cache[(warp_loc_row + WARPS_PER_BLOCK) * round_dim + lane_id], out_cache[wid * round_dim + lane_id]);
 
             
@@ -106,13 +108,13 @@ __global__ void spmm_kernel_opt(const int *_block4, const int *coo_row, const in
             if (block_degree <= DEG_BOUND)
             {
 
-                vout[(block_row_begin + wid) * feat_in + lane_id] = out_cache[wid * round_dim + lane_id];
+                vout[(block_row_begin + wid) * feat_in + lane_id] = out_cache[tid];
             }
 
             else
             {
 
-                atomicAdd(&vout[(block_row_begin + wid) * feat_in + lane_id], out_cache[wid * round_dim + lane_id]);
+                atomicAdd(&vout[(block_row_begin + wid) * feat_in + lane_id], out_cache[tid]);
             }
         }
         
