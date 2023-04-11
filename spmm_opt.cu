@@ -30,16 +30,17 @@ __global__ void spmm_kernel_opt(const int *_block4, const int *coo_row, const in
     extern __shared__ float out_cache[];
     CONSTINT round_dim = DIM_MUL(feat_in);
     // CONSTINT round_dim = feat_in;
-    CONSTINT lane_id = threadIdx.x % round_dim;
-    if (lane_id >= feat_in)
-    {
-        return;
-    }
+    
     CONSTINT warps_per_row = (row_nz + w_nz - 1) / w_nz;
 
 #pragma unroll
     for (int ext = 0; ext < (feat_in + 31) / 32; ext++)
     {
+        CONSTINT lane_id = (threadIdx.x + ext * blockDim.x) % round_dim;
+        if (lane_id >= feat_in)
+        {
+            return;
+        }
         CONSTINT wid = (threadIdx.x + ext * blockDim.x) / round_dim;
         CONSTINT tid = wid * round_dim + lane_id;
         
