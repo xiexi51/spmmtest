@@ -9,7 +9,8 @@ public:
     float *vout_ref;
 
 protected:
-    int *coo_row, *_block4;
+    int *_warp4;
+    int num_warps;
     
 
 public:
@@ -18,6 +19,3 @@ protected:
     void run();
 
 };
-
-// __global__ void spmm_kernel_opt(int *ptr, int *coo_row, int *idx, float *val, float *vin, float *vout, int num_v, int feat_in);
-// double spmm_opt(int *ptr, int *idx, float *val, float *vin, float *vout, int num_v, int num_e, int dim, int times);

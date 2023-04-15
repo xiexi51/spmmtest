@@ -1,7 +1,7 @@
 #pragma once
 #include "spmm_base.h"
 
-class SPMM_OPT2 : public SPMM_BASE
+class SPMM_OPT_INNERLOOP : public SPMM_BASE
 {
 public:
     using SPMM_BASE::SPMM_BASE;

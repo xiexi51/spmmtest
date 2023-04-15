@@ -1,8 +1,10 @@
 #include <iostream>
 #include "data.h"
 #include "spmm_ref.h"
+#include "spmm_opt_sort.h"
+#include "spmm_opt_sort_innerloop.h"
 #include "spmm_opt.h"
-#include "spmm_opt2.h"
+#include "spmm_opt_innerloop.h"
 #include "spmm_gnna.h"
 #include "spmm_cusparse.h"
 #include <random>
@@ -75,10 +77,12 @@ int main(int argc, char *argv[])
     float *cu_val;
     cudaMallocManaged(&cu_val, e_num * sizeof(float));
 
-    float *cu_vin, *cu_vout, *cu_vout_ref, *cu_vout2, *cu_vout_gnna, *cu_vout_ref_new;
+    float *cu_vin, *cu_vout, *cu_vout2, *cu_vout_new, *cu_vout2_new, *cu_vout_ref,  *cu_vout_gnna, *cu_vout_ref_new;
     cudaMallocManaged(&cu_vin, v_num * dim * sizeof(float));
     cudaMallocManaged(&cu_vout, v_num * dim * sizeof(float));
     cudaMallocManaged(&cu_vout2, v_num * dim * sizeof(float));
+    cudaMallocManaged(&cu_vout_new, v_num * dim * sizeof(float));
+    cudaMallocManaged(&cu_vout2_new, v_num * dim * sizeof(float));
     cudaMallocManaged(&cu_vout_gnna, v_num * dim * sizeof(float));
     cudaMallocManaged(&cu_vout_ref, v_num * dim * sizeof(float));
     cudaMallocManaged(&cu_vout_ref_new, v_num * dim * sizeof(float));
@@ -125,10 +129,12 @@ int main(int argc, char *argv[])
     fill(cu_vout_ref, cu_vout_ref + v_num * dim, 0);
     fill(cu_vout_ref_new, cu_vout_ref_new + v_num * dim, 0);
 
-    SPMM_OPT opt(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout, v_num, e_num, dim);
-    SPMM_OPT2 opt2(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim);
+    SPMM_OPT_SORT opt_sort(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_new, v_num, e_num, dim);
+    SPMM_OPT_SORT_INNERLOOP opt_sort_innerloop(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout2_new, v_num, e_num, dim);
+    SPMM_OPT opt(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout, v_num, e_num, dim);
+    SPMM_OPT_INNERLOOP opt_innerloop(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim);
     SPMM_GNNA gnna(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_gnna, v_num, e_num, dim);
-    opt.do_test(false);
+    opt_sort.do_test(false);
 
     // for (int i = 0; i < v_num; i++)
     // {
@@ -140,7 +146,7 @@ int main(int argc, char *argv[])
     //     cout << endl;
     // }
 
-    opt2.do_test(false);
+    opt_sort_innerloop.do_test(false);
 
     // for (int i = 0; i < v_num; i++)
     // {
@@ -151,6 +157,9 @@ int main(int argc, char *argv[])
     //     }
     //     cout << endl;
     // }
+
+    opt.do_test(false);
+    opt_innerloop.do_test(false);
 
 
     gnna.do_test(false);
@@ -171,9 +180,13 @@ int main(int argc, char *argv[])
     spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 0);
 
     bool has_err = 0;
+    cout << "checking opt_sort" << endl;
+    check_err(cu_vout_new, cu_vout_ref_new, v_num * dim, has_err);
+    cout << "checking opt_sort_innerloop" << endl;
+    check_err(cu_vout2_new, cu_vout_ref_new, v_num * dim, has_err);
     cout << "checking opt" << endl;
-    check_err(cu_vout, cu_vout_ref_new, v_num * dim, has_err);
-    cout << "checking opt2" << endl;
+    check_err(cu_vout, cu_vout_ref, v_num * dim, has_err);
+    cout << "checking opt_innerloop" << endl;
     check_err(cu_vout2, cu_vout_ref, v_num * dim, has_err);
     cout << "checking gnna" << endl;
     check_err(cu_vout_gnna, cu_vout_ref, v_num * dim, has_err);
@@ -184,11 +197,17 @@ int main(int argc, char *argv[])
         double t_cusparse = spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 10);
         cout << "cusparse time = " << t_cusparse * 1000 << endl;
 
+        double t_opt_sort = opt_sort.do_test(true);
+        cout << "opt_sort time = " << t_opt_sort * 1000 << endl;
+
+        double t_opt_sort_innerloop = opt_sort_innerloop.do_test(true);
+        cout << "opt_sort_innerloop time = " << t_opt_sort_innerloop * 1000 << endl;
+
         double t_opt = opt.do_test(true);
         cout << "opt time = " << t_opt * 1000 << endl;
 
-        double t_opt2 = opt2.do_test(true);
-        cout << "opt2 time = " << t_opt2 * 1000 << endl;
+        double t_opt_innerloop = opt_innerloop.do_test(true);
+        cout << "opt_innerloop time = " << t_opt_innerloop * 1000 << endl;
 
         double t_gnna = gnna.do_test(true);
         cout << "gnna time = " << t_gnna * 1000 << endl;
@@ -202,6 +221,8 @@ int main(int argc, char *argv[])
     cudaFree(cu_vin);
     cudaFree(cu_vout);
     cudaFree(cu_vout2);
+    cudaFree(cu_vout_new);
+    cudaFree(cu_vout2_new);
     cudaFree(cu_vout_gnna);
     cudaFree(cu_vout_ref);
     cudaFree(cu_vout_ref_new);
