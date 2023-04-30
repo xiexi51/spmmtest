@@ -57,7 +57,7 @@ void SPMM_OPT::run(int dim)
 
 double SPMM_OPT::do_test(bool timing, int dim)
 {
-    this->num_warps = cuda_read_array(&this->_warp4, "/home/xix22010/py_projects/graph_preprocess/warp_4/" + graph + ".warp4") / 4;
+    this->num_warps = cuda_read_array(&this->_warp4, "/home/xix22010/py_projects/graph_preprocess/warp_4/" + this->_graph + ".warp4") / 4;
     int block_num = (num_warps + WARPS_PER_BLOCK - 1) / WARPS_PER_BLOCK;
     if (!timing)
     {

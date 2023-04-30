@@ -10,10 +10,11 @@
 #include "spmm_col.h"
 #include <random>
 #include <algorithm>
+#include <filesystem>
 
 string base_dir = "/home/xix22010/cuda_projects/hpc_data/";
 // string base_dir = "/home/xiexi/PycharmProjects/pythonProject/graphs/";
-string graph = "cora";
+// string _graph = "cora";
 
 using namespace std;
 
@@ -54,7 +55,7 @@ double check_err(float *out, float *out_ref, int len, bool &has_err)
 
 void test_graph(string graph)
 {
-    int dim_min = 128, dim_max = 128;
+    int dim_min = 16, dim_max = 128;
     int *cu_indptr, *cu_indices, *cu_indptr_new, *cu_indices_new, *cu_coo_row;
     int v_num = cuda_read_array(&cu_indptr_new, base_dir + graph + ".new_indptr") - 1;
     int e_num = cuda_read_array(&cu_indices_new, base_dir + graph + ".new_indices");
@@ -73,7 +74,7 @@ void test_graph(string graph)
         }
     }
 
-    cout << "graph = " << graph << " v_num = " << v_num << " e_num = " << e_num << endl;
+    // cout << "graph = " << graph << " v_num = " << v_num << " e_num = " << e_num << endl;
     float *cu_val;
     cudaMallocManaged(&cu_val, e_num * sizeof(float));
 
@@ -121,7 +122,7 @@ void test_graph(string graph)
         generate(cu_vin, cu_vin + v_num * dim_max, [&]()
                  { return rd(engine); });
         break;
-    
+
     default:
         break;
     }
@@ -133,20 +134,19 @@ void test_graph(string graph)
     fill(cu_vout_ref, cu_vout_ref + v_num * dim_max, 0);
     fill(cu_vout_ref_new, cu_vout_ref_new + v_num * dim_max, 0);
 
-    SPMM_OPT_SORT opt_sort(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_new, v_num, e_num, dim_max);
-    SPMM_OPT_SORT_INNERLOOP opt_sort_innerloop(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout2_new, v_num, e_num, dim_max);
-    SPMM_OPT opt(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout, v_num, e_num, dim_max);
-    SPMM_OPT_INNERLOOP opt_innerloop(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim_max);
-    SPMM_GNNA gnna(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_gnna, v_num, e_num, dim_max);
-    SPMM_COL spmm_col(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_col, v_num, e_num, dim_max);
+    SPMM_OPT_SORT opt_sort(graph, cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_new, v_num, e_num, dim_max);
+    SPMM_OPT_SORT_INNERLOOP opt_sort_innerloop(graph, cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout2_new, v_num, e_num, dim_max);
+    SPMM_OPT opt(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout, v_num, e_num, dim_max);
+    SPMM_OPT_INNERLOOP opt_innerloop(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim_max);
+    SPMM_GNNA gnna(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_gnna, v_num, e_num, dim_max);
+    SPMM_COL spmm_col(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_col, v_num, e_num, dim_max);
 
 // #define CHECK
 #define TIMING
 
-
     for (int dim = dim_min; dim <= dim_max; dim++)
     {
-        cout << "dim = " << dim << endl;
+        // cout << "dim = " << dim << endl;
 
 #ifdef CHECK
         spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 0);
@@ -158,7 +158,7 @@ void test_graph(string graph)
         opt_innerloop.do_test(false, dim);
         gnna.do_test(false, dim);
         spmm_col.do_test(false, dim);
-        
+
         bool has_err = 0;
         cout << "checking cusparse_coo" << endl;
         check_err(cu_vout_ref_coo, cu_vout_ref, v_num * dim, has_err);
@@ -177,31 +177,30 @@ void test_graph(string graph)
 
 #endif
 
-
 #ifdef TIMING
         double t_cusparse = spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 10);
-        cout << "cusparse time = " << t_cusparse * 1000 << endl;
+        cout << graph << " " << dim << " cusparse " << t_cusparse * 1000 << endl;
 
         double t_cusparse_coo = spmm_cusparse_coo(cu_coo_row, cu_indices, cu_val, cu_vin, cu_vout_ref_coo, v_num, e_num, dim, 10);
-        cout << "cusparse_coo time = " << t_cusparse_coo * 1000 << endl;
+        cout << graph << " " << dim << " cusparse_coo " << t_cusparse_coo * 1000 << endl;
 
         double t_opt_sort = opt_sort.do_test(true, dim);
-        cout << "opt_sort time = " << t_opt_sort * 1000 << endl;
+        cout << graph << " " << dim << " opt_sort " << t_opt_sort * 1000 << endl;
 
         double t_opt_sort_innerloop = opt_sort_innerloop.do_test(true, dim);
-        cout << "opt_sort_innerloop time = " << t_opt_sort_innerloop * 1000 << endl;
+        cout << graph << " " << dim << " opt_sort_innerloop " << t_opt_sort_innerloop * 1000 << endl;
 
         double t_opt = opt.do_test(true, dim);
-        cout << "opt time = " << t_opt * 1000 << endl;
+        cout << graph << " " << dim << " opt " << t_opt * 1000 << endl;
 
         double t_opt_innerloop = opt_innerloop.do_test(true, dim);
-        cout << "opt_innerloop time = " << t_opt_innerloop * 1000 << endl;
+        cout << graph << " " << dim << " opt_innerloop " << t_opt_innerloop * 1000 << endl;
 
         double t_gnna = gnna.do_test(true, dim);
-        cout << "gnna time = " << t_gnna * 1000 << endl;
+        cout << graph << " " << dim << " gnna " << t_gnna * 1000 << endl;
 
         double t_spmm_col = spmm_col.do_test(true, dim);
-        cout << "spmm_col time = " << t_spmm_col * 1000 << endl;
+        cout << graph << " " << dim << " spmm_col " << t_spmm_col * 1000 << endl;
 
 #endif
     }
@@ -229,11 +228,29 @@ int main(int argc, char *argv[])
     if (argc > 1)
     {
         string arg_graph(argv[1]);
-        graph = arg_graph;
+        cout << "dir = " << base_dir << endl;
+        test_graph(arg_graph);
     }
-    cout << "dir = " << base_dir << endl;
-    
-    test_graph(graph);
+    else
+    {
+        string folder_path = "/home/xix22010/cuda_projects/hpc_data/";
+        string extension = ".config";
+        filesystem::directory_iterator iter(folder_path);
+        int n = 0;
+        for (const auto &file : iter)
+        {
+            if (file.path().extension() == extension)
+            {
+                test_graph(file.path().stem().string());
+                cudaDeviceSynchronize();
+                n++;
+                // if (n >= 2)
+                // {
+                //     break;
+                // }
+            }
+        }
+    }
 
     return 0;
 }

@@ -164,7 +164,7 @@ double SPMM_OPT_SORT_INNERLOOP::do_test(bool timing, int dim)
     //     }
     // }
 
-    int block_num = cuda_read_array(&this->_block4, "/home/xix22010/py_projects/graph_preprocess/block_4/" + graph + ".block4") / 4;
+    int block_num = cuda_read_array(&this->_block4, "/home/xix22010/py_projects/graph_preprocess/block_4/" + this->_graph + ".block4") / 4;
     if (!timing)
     {
         cout << "block num = " << block_num << endl;
