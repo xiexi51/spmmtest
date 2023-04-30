@@ -14,8 +14,8 @@ protected:
     
 
 public:
-    double do_test(bool timing);
+    double do_test(bool timing, int dim);
 protected:
-    void run();
+    void run(int dim);
 
 };

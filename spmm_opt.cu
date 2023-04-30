@@ -50,12 +50,12 @@ __global__ void spmm_kernel_opt(const int *_warp4, const int *idx, const float *
     }
 }
 
-void SPMM_OPT::run()
+void SPMM_OPT::run(int dim)
 {
     spmm_kernel_opt<<<grid, block, WARPS_PER_BLOCK * ((dim + 31) / 32) * 32 * sizeof(float)>>>(_warp4, idx, val, vin, vout, num_v, num_e, dim, num_warps);
 }
 
-double SPMM_OPT::do_test(bool timing)
+double SPMM_OPT::do_test(bool timing, int dim)
 {
     this->num_warps = cuda_read_array(&this->_warp4, "/home/xix22010/py_projects/graph_preprocess/warp_4/" + graph + ".warp4") / 4;
     int block_num = (num_warps + WARPS_PER_BLOCK - 1) / WARPS_PER_BLOCK;
@@ -67,7 +67,7 @@ double SPMM_OPT::do_test(bool timing)
     grid.x = block_num;
     block.x = WARPS_PER_BLOCK * 32;
 
-    double ret = timing_body(timing);
+    double ret = timing_body(timing, dim);
 
     cudaFree(this->_warp4);
     return ret;

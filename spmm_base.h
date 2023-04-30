@@ -17,7 +17,7 @@ public:
     }
     ~SPMM_BASE() {}
 
-    virtual double do_test(bool timing) = 0;
+    virtual double do_test(bool timing, int dim) = 0;
 
 protected:
     int *ptr, *idx;
@@ -26,13 +26,13 @@ protected:
     dim3 grid, block;
 
 protected:
-    virtual void run() = 0;
-    double timing_body(bool timing)
+    virtual void run(int dim) = 0;
+    double timing_body(bool timing, int dim)
     {
         double ret = 0;
         if (!timing)
         {
-            run();
+            run(dim);
             cudaDeviceSynchronize();
         }
         else
@@ -41,14 +41,14 @@ protected:
             // warmup
             for (int i = 0; i < times; i++)
             {
-                run();
+                run(dim);
             }
             cudaDeviceSynchronize();
             double measured_time = 0;
             for (int i = 0; i < times; i++)
             {
                 timestamp(t0);
-                run();
+                run(dim);
                 cudaDeviceSynchronize();
                 timestamp(t1);
                 measured_time += getDuration(t0, t1);

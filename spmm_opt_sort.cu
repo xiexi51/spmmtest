@@ -101,13 +101,13 @@ __global__ void spmm_kernel_opt_sort(const int *_block4, const int *coo_row, con
     }
 }
 
-void SPMM_OPT_SORT::run()
+void SPMM_OPT_SORT::run(int dim)
 {
     int shared_size = (WARPS_PER_BLOCK + 0 * WARPS_PER_BLOCK / 2) * DIM_MUL(dim) * sizeof(float);
     spmm_kernel_opt_sort<<<grid, block, shared_size>>>(_block4, 0, idx, val, vin, vout, num_v, num_e, dim, 0);
 }
 
-double SPMM_OPT_SORT::do_test(bool timing)
+double SPMM_OPT_SORT::do_test(bool timing, int dim)
 {
     // cudaMallocManaged(&coo_row, num_e * sizeof(int));
     // int k = 0;
@@ -131,7 +131,7 @@ double SPMM_OPT_SORT::do_test(bool timing)
     // block.y = WARPS_PER_BLOCK;
     block.x = WARPS_PER_BLOCK * 32;
 
-    double ret = timing_body(timing);
+    double ret = timing_body(timing, dim);
 
     // cudaFree(coo_row);
     cudaFree(this->_block4);

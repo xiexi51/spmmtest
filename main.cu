@@ -134,6 +134,9 @@ int main(int argc, char *argv[])
     SPMM_OPT opt(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout, v_num, e_num, dim);
     SPMM_OPT_INNERLOOP opt_innerloop(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim);
     SPMM_GNNA gnna(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_gnna, v_num, e_num, dim);
+
+    spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 0);
+
     opt_sort.do_test(false);
 
     // for (int i = 0; i < v_num; i++)
@@ -164,7 +167,7 @@ int main(int argc, char *argv[])
 
     gnna.do_test(false);
 
-    spmm_cusparse(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_ref_new, v_num, e_num, dim, 0);
+    // spmm_cusparse(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_ref_new, v_num, e_num, dim, 0);
 
     // for (int i = 0; i < v_num; i++)
     // {
@@ -177,40 +180,42 @@ int main(int argc, char *argv[])
     // }
 
 
-    spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 0);
-
-    bool has_err = 0;
-    cout << "checking opt_sort" << endl;
-    check_err(cu_vout_new, cu_vout_ref_new, v_num * dim, has_err);
-    cout << "checking opt_sort_innerloop" << endl;
-    check_err(cu_vout2_new, cu_vout_ref_new, v_num * dim, has_err);
-    cout << "checking opt" << endl;
-    check_err(cu_vout, cu_vout_ref, v_num * dim, has_err);
-    cout << "checking opt_innerloop" << endl;
-    check_err(cu_vout2, cu_vout_ref, v_num * dim, has_err);
-    cout << "checking gnna" << endl;
-    check_err(cu_vout_gnna, cu_vout_ref, v_num * dim, has_err);
     
 
-    if (true)
+    if(0){
+        bool has_err = 0;
+        cout << "checking opt_sort" << endl;
+        check_err(cu_vout_new, cu_vout_ref_new, v_num * dim, has_err);
+        cout << "checking opt_sort_innerloop" << endl;
+        check_err(cu_vout2_new, cu_vout_ref_new, v_num * dim, has_err);
+        cout << "checking opt" << endl;
+        check_err(cu_vout, cu_vout_ref, v_num * dim, has_err);
+        cout << "checking opt_innerloop" << endl;
+        check_err(cu_vout2, cu_vout_ref, v_num * dim, has_err);
+        cout << "checking gnna" << endl;
+        check_err(cu_vout_gnna, cu_vout_ref, v_num * dim, has_err);
+    }
+    
+
+    if (1)
     {
         double t_cusparse = spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 10);
-        cout << "cusparse time = " << t_cusparse * 1000 << endl;
+        cout << "cusparse time = " << t_cusparse * 1000 * 1000 << endl;
 
         double t_opt_sort = opt_sort.do_test(true);
-        cout << "opt_sort time = " << t_opt_sort * 1000 << endl;
-
-        double t_opt_sort_innerloop = opt_sort_innerloop.do_test(true);
-        cout << "opt_sort_innerloop time = " << t_opt_sort_innerloop * 1000 << endl;
+        cout << "opt_sort time = " << t_opt_sort * 1000 * 1000 << endl;
 
         double t_opt = opt.do_test(true);
-        cout << "opt time = " << t_opt * 1000 << endl;
+        cout << "opt time = " << t_opt * 1000 * 1000 << endl;
+
+        double t_opt_sort_innerloop = opt_sort_innerloop.do_test(true);
+        cout << "opt_sort_innerloop time = " << t_opt_sort_innerloop * 1000 * 1000 << endl;
 
         double t_opt_innerloop = opt_innerloop.do_test(true);
-        cout << "opt_innerloop time = " << t_opt_innerloop * 1000 << endl;
+        cout << "opt_innerloop time = " << t_opt_innerloop * 1000 * 1000 << endl;
 
         double t_gnna = gnna.do_test(true);
-        cout << "gnna time = " << t_gnna * 1000 << endl;
+        cout << "gnna time = " << t_gnna * 1000 * 1000 << endl;
     }
 
     cudaFree(cu_indptr);

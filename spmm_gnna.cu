@@ -132,19 +132,19 @@ __global__ void SAG_cuda_kernel(
 #pragma unroll
             for (int d = laneid; d < dim; d += dimWorker)
             {
-                atomicAdd((float *)&output[srcId * dim + d], partial_results[presult_base + d]);
+                atomicAdd_F((float *)&output[srcId * dim + d], partial_results[presult_base + d]);
                 // output[srcId * dim + d] += partial_results[presult_base + d];
                 // atomicAdd((float *)&output[srcId * dim + d], partial_results[presult_base + d]);
             }
     }
 }
 
-void SPMM_GNNA::run()
+void SPMM_GNNA::run(int dim)
 {
     SAG_cuda_kernel<<<grid, block, shared_memory>>>(vout, vin, ptr, idx, 0, partPtr, part2Node, num_v, dim, num_parts, partSize, 32, warpPerBlock);
 }
 
-double SPMM_GNNA::do_test(bool timing)
+double SPMM_GNNA::do_test(bool timing, int dim)
 {
     partSize = num_e / num_v;
     
@@ -164,7 +164,7 @@ double SPMM_GNNA::do_test(bool timing)
     copy(parts[0].begin(), parts[0].end(), partPtr);
     copy(parts[1].begin(), parts[1].end(), part2Node);
 
-    double ret = timing_body(timing);
+    double ret = timing_body(timing, dim);
 
     cudaFree(partPtr);
     cudaFree(part2Node);
