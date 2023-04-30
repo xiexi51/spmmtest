@@ -55,13 +55,11 @@ double check_err(float *out, float *out_ref, int len, bool &has_err)
 void test_graph(string graph)
 {
     int dim_min = 128, dim_max = 128;
-    int *cu_indptr, *cu_indices, *cu_indptr_new, *cu_indices_new, *rabbit_indptr, *rabbit_indices, *cu_coo_row;
+    int *cu_indptr, *cu_indices, *cu_indptr_new, *cu_indices_new, *cu_coo_row;
     int v_num = cuda_read_array(&cu_indptr_new, base_dir + graph + ".new_indptr") - 1;
     int e_num = cuda_read_array(&cu_indices_new, base_dir + graph + ".new_indices");
     cuda_read_array(&cu_indptr, base_dir + graph + ".graph.ptrdump");
     cuda_read_array(&cu_indices, base_dir + graph + ".graph.edgedump");
-    int rabbit_v_num = cuda_read_array(&rabbit_indptr, base_dir + "rabbit_" + graph + ".graph.ptrdump") - 1;
-    int rabbit_e_num = cuda_read_array(&rabbit_indices, base_dir + "rabbit_" + graph + ".graph.edgedump");
 
     cudaMallocManaged(&cu_coo_row, e_num * sizeof(int));
     {
@@ -76,11 +74,10 @@ void test_graph(string graph)
     }
 
     cout << "graph = " << graph << " v_num = " << v_num << " e_num = " << e_num << endl;
-    // cout << "graph = " << graph << " rabbit_v_num = " << rabbit_v_num << " rabbit_e_num = " << rabbit_e_num << endl;
     float *cu_val;
     cudaMallocManaged(&cu_val, e_num * sizeof(float));
 
-    float *cu_vin, *cu_vout, *cu_vout2, *cu_vout_new, *cu_vout2_new, *cu_vout_ref, *cu_vout_gnna, *cu_vout_ref_new, *cu_vout_ref_rabbit, *cu_vout_gnna_rabbit, *cu_vout_ref_coo, *cu_vout_col;
+    float *cu_vin, *cu_vout, *cu_vout2, *cu_vout_new, *cu_vout2_new, *cu_vout_ref, *cu_vout_gnna, *cu_vout_ref_new, *cu_vout_ref_coo, *cu_vout_col;
     cudaMallocManaged(&cu_vin, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout2, v_num * dim_max * sizeof(float));
@@ -89,8 +86,6 @@ void test_graph(string graph)
     cudaMallocManaged(&cu_vout_gnna, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_ref, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_ref_new, v_num * dim_max * sizeof(float));
-    cudaMallocManaged(&cu_vout_ref_rabbit, v_num * dim_max * sizeof(float));
-    cudaMallocManaged(&cu_vout_gnna_rabbit, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_ref_coo, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_col, v_num * dim_max * sizeof(float));
 
@@ -137,17 +132,15 @@ void test_graph(string graph)
     fill(cu_vout_gnna, cu_vout_gnna + v_num * dim_max, 0);
     fill(cu_vout_ref, cu_vout_ref + v_num * dim_max, 0);
     fill(cu_vout_ref_new, cu_vout_ref_new + v_num * dim_max, 0);
-    fill(cu_vout_gnna_rabbit, cu_vout_gnna_rabbit + v_num * dim_max, 0);
 
     SPMM_OPT_SORT opt_sort(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_new, v_num, e_num, dim_max);
     SPMM_OPT_SORT_INNERLOOP opt_sort_innerloop(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout2_new, v_num, e_num, dim_max);
     SPMM_OPT opt(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout, v_num, e_num, dim_max);
     SPMM_OPT_INNERLOOP opt_innerloop(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim_max);
     SPMM_GNNA gnna(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_gnna, v_num, e_num, dim_max);
-    SPMM_GNNA gnna_rabbit(rabbit_indptr, rabbit_indices, cu_val, cu_vin, cu_vout_gnna_rabbit, v_num, e_num, dim_max);
     SPMM_COL spmm_col(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_col, v_num, e_num, dim_max);
 
-#define CHECK
+// #define CHECK
 #define TIMING
 
 
@@ -164,7 +157,6 @@ void test_graph(string graph)
         opt.do_test(false, dim);
         opt_innerloop.do_test(false, dim);
         gnna.do_test(false, dim);
-        gnna_rabbit.do_test(false, dim);
         spmm_col.do_test(false, dim);
         
         bool has_err = 0;
@@ -180,8 +172,6 @@ void test_graph(string graph)
         check_err(cu_vout2, cu_vout_ref, v_num * dim, has_err);
         cout << "checking gnna" << endl;
         check_err(cu_vout_gnna, cu_vout_ref, v_num * dim, has_err);
-        cout << "checking rabbit" << endl;
-        check_err(cu_vout_gnna_rabbit, cu_vout_ref, v_num * dim, has_err);
         cout << "checking spmm_col" << endl;
         check_err(cu_vout_col, cu_vout_ref, v_num * dim, has_err);
 
@@ -191,9 +181,6 @@ void test_graph(string graph)
 #ifdef TIMING
         double t_cusparse = spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 10);
         cout << "cusparse time = " << t_cusparse * 1000 << endl;
-
-        double t_cusparse_rabbit = spmm_cusparse(rabbit_indptr, rabbit_indices, cu_val, cu_vin, cu_vout_ref_rabbit, v_num, e_num, dim, 10);
-        cout << "cusparse_rabbit time = " << t_cusparse_rabbit * 1000 << endl;
 
         double t_cusparse_coo = spmm_cusparse_coo(cu_coo_row, cu_indices, cu_val, cu_vin, cu_vout_ref_coo, v_num, e_num, dim, 10);
         cout << "cusparse_coo time = " << t_cusparse_coo * 1000 << endl;
@@ -213,23 +200,17 @@ void test_graph(string graph)
         double t_gnna = gnna.do_test(true, dim);
         cout << "gnna time = " << t_gnna * 1000 << endl;
 
-        double t_gnna_rabbit = gnna_rabbit.do_test(true, dim);
-        cout << "gnna_rabbit time = " << t_gnna_rabbit * 1000 << endl;
-
         double t_spmm_col = spmm_col.do_test(true, dim);
         cout << "spmm_col time = " << t_spmm_col * 1000 << endl;
 
 #endif
     }
 
-
     cudaFree(cu_indptr);
     cudaFree(cu_indices);
     cudaFree(cu_coo_row);
     cudaFree(cu_indptr_new);
     cudaFree(cu_indices_new);
-    cudaFree(rabbit_indptr);
-    cudaFree(rabbit_indices);
     cudaFree(cu_val);
     cudaFree(cu_vin);
     cudaFree(cu_vout);
@@ -239,8 +220,6 @@ void test_graph(string graph)
     cudaFree(cu_vout_gnna);
     cudaFree(cu_vout_ref);
     cudaFree(cu_vout_ref_new);
-    cudaFree(cu_vout_ref_rabbit);
-    cudaFree(cu_vout_gnna_rabbit);
     cudaFree(cu_vout_ref_coo);
     cudaFree(cu_vout_col);
 }
