@@ -16,6 +16,8 @@ string base_dir = "/home/xix22010/cuda_projects/hpc_data/";
 // string base_dir = "/home/xiexi/PycharmProjects/pythonProject/graphs/";
 // string _graph = "cora";
 
+int total_file_cnt, current_file_cnt;
+
 using namespace std;
 
 double check_err(float *out, float *out_ref, int len, bool &has_err)
@@ -53,9 +55,15 @@ double check_err(float *out, float *out_ref, int len, bool &has_err)
     return err_sum;
 }
 
-void test_graph(string graph)
+void test_graph(string graph, int spec_dim)
 {
     int dim_min = 16, dim_max = 128;
+    if (spec_dim > 0)
+    {
+        dim_min = spec_dim;
+        dim_max = spec_dim;
+    }
+
     int *cu_indptr, *cu_indices, *cu_indptr_new, *cu_indices_new, *cu_coo_row;
     int v_num = cuda_read_array(&cu_indptr_new, base_dir + graph + ".new_indptr") - 1;
     int e_num = cuda_read_array(&cu_indices_new, base_dir + graph + ".new_indices");
@@ -178,29 +186,31 @@ void test_graph(string graph)
 #endif
 
 #ifdef TIMING
+        string outstr = to_string(current_file_cnt) + "/" + to_string(total_file_cnt) + " " + graph + " " + to_string(dim);
+
         double t_cusparse = spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_ref, v_num, e_num, dim, 10);
-        cout << graph << " " << dim << " cusparse " << t_cusparse * 1000 << endl;
+        cout << outstr << " cusparse " << t_cusparse * 1000000 << endl;
 
         double t_cusparse_coo = spmm_cusparse_coo(cu_coo_row, cu_indices, cu_val, cu_vin, cu_vout_ref_coo, v_num, e_num, dim, 10);
-        cout << graph << " " << dim << " cusparse_coo " << t_cusparse_coo * 1000 << endl;
-
-        double t_opt_sort = opt_sort.do_test(true, dim);
-        cout << graph << " " << dim << " opt_sort " << t_opt_sort * 1000 << endl;
-
-        double t_opt_sort_innerloop = opt_sort_innerloop.do_test(true, dim);
-        cout << graph << " " << dim << " opt_sort_innerloop " << t_opt_sort_innerloop * 1000 << endl;
-
-        double t_opt = opt.do_test(true, dim);
-        cout << graph << " " << dim << " opt " << t_opt * 1000 << endl;
-
-        double t_opt_innerloop = opt_innerloop.do_test(true, dim);
-        cout << graph << " " << dim << " opt_innerloop " << t_opt_innerloop * 1000 << endl;
+        cout << outstr << " cusparse_coo " << t_cusparse_coo * 1000000 << endl;
 
         double t_gnna = gnna.do_test(true, dim);
-        cout << graph << " " << dim << " gnna " << t_gnna * 1000 << endl;
+        cout << outstr << " gnna " << t_gnna * 1000000 << endl;
 
         double t_spmm_col = spmm_col.do_test(true, dim);
-        cout << graph << " " << dim << " spmm_col " << t_spmm_col * 1000 << endl;
+        cout << outstr << " spmm_col " << t_spmm_col * 1000000 << endl;
+
+        double t_opt_sort = opt_sort.do_test(true, dim);
+        cout << outstr << " opt_sort " << t_opt_sort * 1000000 << endl;
+
+        double t_opt_sort_innerloop = opt_sort_innerloop.do_test(true, dim);
+        cout << outstr << " opt_sort_innerloop " << t_opt_sort_innerloop * 1000000 << endl;
+
+        double t_opt = opt.do_test(true, dim);
+        cout << outstr << " opt " << t_opt * 1000000 << endl;
+
+        double t_opt_innerloop = opt_innerloop.do_test(true, dim);
+        cout << outstr << " opt_innerloop " << t_opt_innerloop * 1000000 << endl;
 
 #endif
     }
@@ -225,29 +235,40 @@ void test_graph(string graph)
 
 int main(int argc, char *argv[])
 {
-    if (argc > 1)
+    if (argc > 2)
     {
         string arg_graph(argv[1]);
+        int dim = atoi(argv[2]);
         cout << "dir = " << base_dir << endl;
-        test_graph(arg_graph);
+        test_graph(arg_graph, dim);
     }
     else
     {
         string folder_path = "/home/xix22010/cuda_projects/hpc_data/";
         string extension = ".config";
-        filesystem::directory_iterator iter(folder_path);
-        int n = 0;
-        for (const auto &file : iter)
+
+        total_file_cnt = 0;
+        for (const auto &file : filesystem::directory_iterator(folder_path))
         {
             if (file.path().extension() == extension)
             {
-                test_graph(file.path().stem().string());
-                cudaDeviceSynchronize();
-                n++;
-                // if (n >= 2)
+                total_file_cnt++;
+            }
+        }
+
+        current_file_cnt = 0;
+        for (const auto &file : filesystem::directory_iterator(folder_path))
+        {
+            if (file.path().extension() == extension)
+            {
+                current_file_cnt++;
+                string graph = file.path().stem().string();
+                // if (!(graph == "wikikg2" || graph == "rabbit_wikikg2"))
                 // {
-                //     break;
+                //     continue;
                 // }
+                test_graph(graph, 0);
+                cudaDeviceSynchronize();
             }
         }
     }

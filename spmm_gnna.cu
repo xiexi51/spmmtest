@@ -147,6 +147,9 @@ void SPMM_GNNA::run(int dim)
 double SPMM_GNNA::do_test(bool timing, int dim)
 {
     partSize = num_e / num_v;
+    if(partSize < 1){
+        partSize = 1;
+    }
     
     vector<int> indptr_vec((int*)ptr, (int*)ptr + num_v + 1);
     vector<vector<int>> parts = build_part(partSize, indptr_vec);

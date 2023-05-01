@@ -41,7 +41,7 @@ protected:
         }
         else
         {
-            int times = 10;
+            int times = 4;
             // warmup
             for (int i = 0; i < times; i++)
             {
