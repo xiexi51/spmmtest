@@ -2,8 +2,10 @@
 #include "data.h"
 #include "spmm_ref.h"
 #include "spmm_opt_sort.h"
+#include "spmm_opt_sort2.h"
 #include "spmm_opt_sort_innerloop.h"
 #include "spmm_opt.h"
+#include "spmm_opt2.h"
 #include "spmm_opt_innerloop.h"
 #include "spmm_gnna.h"
 #include "spmm_cusparse.h"
@@ -57,7 +59,7 @@ double check_err(float *out, float *out_ref, int len, bool &has_err)
 
 void test_graph(string graph, int spec_dim)
 {
-    int dim_min = 16, dim_max = 128;
+    int dim_min = 160, dim_max = 512, interval = 32;
     if (spec_dim > 0)
     {
         dim_min = spec_dim;
@@ -86,12 +88,14 @@ void test_graph(string graph, int spec_dim)
     float *cu_val;
     cudaMallocManaged(&cu_val, e_num * sizeof(float));
 
-    float *cu_vin, *cu_vout, *cu_vout2, *cu_vout_new, *cu_vout2_new, *cu_vout_ref, *cu_vout_gnna, *cu_vout_ref_new, *cu_vout_ref_coo, *cu_vout_col;
+    float *cu_vin, *cu_vout, *cu_vout2, *cu_vout_inner, *cu_vout_new, *cu_vout_new2, *cu_vout_inner_new, *cu_vout_ref, *cu_vout_gnna, *cu_vout_ref_new, *cu_vout_ref_coo, *cu_vout_col;
     cudaMallocManaged(&cu_vin, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout2, v_num * dim_max * sizeof(float));
+    cudaMallocManaged(&cu_vout_inner, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_new, v_num * dim_max * sizeof(float));
-    cudaMallocManaged(&cu_vout2_new, v_num * dim_max * sizeof(float));
+    cudaMallocManaged(&cu_vout_new2, v_num * dim_max * sizeof(float));
+    cudaMallocManaged(&cu_vout_inner_new, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_gnna, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_ref, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_ref_new, v_num * dim_max * sizeof(float));
@@ -137,22 +141,24 @@ void test_graph(string graph, int spec_dim)
 
     // fill(cu_vin, cu_vin + v_num * dim, 1);
     fill(cu_vout, cu_vout + v_num * dim_max, 0);
-    fill(cu_vout2, cu_vout2 + v_num * dim_max, 0);
+    fill(cu_vout_inner, cu_vout_inner + v_num * dim_max, 0);
     fill(cu_vout_gnna, cu_vout_gnna + v_num * dim_max, 0);
     fill(cu_vout_ref, cu_vout_ref + v_num * dim_max, 0);
     fill(cu_vout_ref_new, cu_vout_ref_new + v_num * dim_max, 0);
 
     SPMM_OPT_SORT opt_sort(graph, cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_new, v_num, e_num, dim_max);
-    SPMM_OPT_SORT_INNERLOOP opt_sort_innerloop(graph, cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout2_new, v_num, e_num, dim_max);
+    SPMM_OPT_SORT2 opt_sort2(graph, cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_new2, v_num, e_num, dim_max);
+    SPMM_OPT_SORT_INNERLOOP opt_sort_innerloop(graph, cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_inner_new, v_num, e_num, dim_max);
     SPMM_OPT opt(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout, v_num, e_num, dim_max);
-    SPMM_OPT_INNERLOOP opt_innerloop(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim_max);
+    SPMM_OPT2 opt2(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout2, v_num, e_num, dim_max);
+    SPMM_OPT_INNERLOOP opt_innerloop(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_inner, v_num, e_num, dim_max);
     SPMM_GNNA gnna(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_gnna, v_num, e_num, dim_max);
     SPMM_COL spmm_col(graph, cu_indptr, cu_indices, cu_val, cu_vin, cu_vout_col, v_num, e_num, dim_max);
 
-// #define CHECK
+#define CHECK
 #define TIMING
 
-    for (int dim = dim_min; dim <= dim_max; dim++)
+    for (int dim = dim_min; dim <= dim_max; dim += interval)
     {
         // cout << "dim = " << dim << endl;
 
@@ -161,8 +167,10 @@ void test_graph(string graph, int spec_dim)
         spmm_cusparse(cu_indptr_new, cu_indices_new, cu_val, cu_vin, cu_vout_ref_new, v_num, e_num, dim, 0);
         spmm_cusparse_coo(cu_coo_row, cu_indices, cu_val, cu_vin, cu_vout_ref_coo, v_num, e_num, dim, 0);
         opt_sort.do_test(false, dim);
+        opt_sort2.do_test(false, dim);
         opt_sort_innerloop.do_test(false, dim);
         opt.do_test(false, dim);
+        opt2.do_test(false, dim);
         opt_innerloop.do_test(false, dim);
         gnna.do_test(false, dim);
         spmm_col.do_test(false, dim);
@@ -172,12 +180,16 @@ void test_graph(string graph, int spec_dim)
         check_err(cu_vout_ref_coo, cu_vout_ref, v_num * dim, has_err);
         cout << "checking opt_sort" << endl;
         check_err(cu_vout_new, cu_vout_ref_new, v_num * dim, has_err);
+        cout << "checking opt_sort2" << endl;
+        check_err(cu_vout_new2, cu_vout_ref_new, v_num * dim, has_err);
         cout << "checking opt_sort_innerloop" << endl;
-        check_err(cu_vout2_new, cu_vout_ref_new, v_num * dim, has_err);
+        check_err(cu_vout_inner_new, cu_vout_ref_new, v_num * dim, has_err);
         cout << "checking opt" << endl;
         check_err(cu_vout, cu_vout_ref, v_num * dim, has_err);
-        cout << "checking opt_innerloop" << endl;
+        cout << "checking opt2" << endl;
         check_err(cu_vout2, cu_vout_ref, v_num * dim, has_err);
+        cout << "checking opt_innerloop" << endl;
+        check_err(cu_vout_inner, cu_vout_ref, v_num * dim, has_err);
         cout << "checking gnna" << endl;
         check_err(cu_vout_gnna, cu_vout_ref, v_num * dim, has_err);
         cout << "checking spmm_col" << endl;
@@ -203,11 +215,17 @@ void test_graph(string graph, int spec_dim)
         double t_opt_sort = opt_sort.do_test(true, dim);
         cout << outstr << " opt_sort " << t_opt_sort * 1000000 << endl;
 
+        double t_opt_sort2 = opt_sort2.do_test(true, dim);
+        cout << outstr << " opt_sort2 " << t_opt_sort2 * 1000000 << endl;
+
         double t_opt_sort_innerloop = opt_sort_innerloop.do_test(true, dim);
         cout << outstr << " opt_sort_innerloop " << t_opt_sort_innerloop * 1000000 << endl;
 
         double t_opt = opt.do_test(true, dim);
         cout << outstr << " opt " << t_opt * 1000000 << endl;
+
+        double t_opt2 = opt2.do_test(true, dim);
+        cout << outstr << " opt2 " << t_opt2 * 1000000 << endl;
 
         double t_opt_innerloop = opt_innerloop.do_test(true, dim);
         cout << outstr << " opt_innerloop " << t_opt_innerloop * 1000000 << endl;
@@ -224,8 +242,10 @@ void test_graph(string graph, int spec_dim)
     cudaFree(cu_vin);
     cudaFree(cu_vout);
     cudaFree(cu_vout2);
+    cudaFree(cu_vout_inner);
     cudaFree(cu_vout_new);
-    cudaFree(cu_vout2_new);
+    cudaFree(cu_vout_new2);
+    cudaFree(cu_vout_inner_new);
     cudaFree(cu_vout_gnna);
     cudaFree(cu_vout_ref);
     cudaFree(cu_vout_ref_new);
@@ -262,6 +282,9 @@ int main(int argc, char *argv[])
             if (file.path().extension() == extension)
             {
                 current_file_cnt++;
+                if(current_file_cnt <= 31)
+                    continue;
+
                 string graph = file.path().stem().string();
                 // if (!(graph == "wikikg2" || graph == "rabbit_wikikg2"))
                 // {
