@@ -32,7 +32,7 @@ __global__ void spmm_kernel_opt2_sparse_shared(const int *_warp4, const int *idx
     // {
     //     out_cache[wid * DIM_MUL(feat_in) + laneid + ext * 32] = 0;
     // }
-    for (int ext = 0; ext < (feat_in + 31) / 32; ext++)
+    for (int ext = 0; ext < (feat_in + dim_sparse - 1) / dim_sparse; ext++)
     {
         out_cache[threadIdx.x + ext * blockDim.x] = 0;
     }
@@ -55,9 +55,9 @@ __global__ void spmm_kernel_opt2_sparse_shared(const int *_warp4, const int *idx
     }
     __syncthreads();
 #pragma unroll
-    for (int ext = 0; ext < (feat_in + 31) / 32; ext++)
+    for (int ext = 0; ext < (feat_in + dim_sparse - 1) / dim_sparse; ext++)
     {
-        atomicAdd(&vout[warp_row * feat_in + laneid + ext * 32], out_cache[wid * DIM_MUL(feat_in) + laneid + ext * 32]);
+        atomicAdd(&vout[warp_row * feat_in + laneid + ext * dim_sparse], out_cache[wid * DIM_MUL(feat_in) + laneid + ext * dim_sparse]);
     }
     
 }
@@ -72,14 +72,14 @@ void SPMM_OPT2_SPARSE_SHARED::run(int dim)
 double SPMM_OPT2_SPARSE_SHARED::do_test(bool timing, int dim)
 {
     this->num_warps = cuda_read_array(&this->_warp4, "/home/xix22010/py_projects/graph_preprocess/warp_4/" + this->_graph + ".warp4") / 4;
-    int block_num = (num_warps + (WARPS_PER_BLOCK * 32 / dim_sparse) - 1) / (WARPS_PER_BLOCK * 32 / dim_sparse);
+    int block_num = (num_warps + (WARPS_PER_BLOCK) - 1) / (WARPS_PER_BLOCK);
     if (!timing)
     {
         cout << "block num = " << block_num << endl;
     }
 
     grid.x = block_num;
-    block.x = WARPS_PER_BLOCK * 32;
+    block.x = WARPS_PER_BLOCK * dim_sparse;
 
     double ret = timing_body(timing, dim);
 

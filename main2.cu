@@ -62,7 +62,8 @@ double check_err(float *out, float *out_ref, int len, bool &has_err)
 void test_graph(string graph, int spec_dim)
 {
     int dim_min = 256, dim_max = 256, interval = 1;
-    int dim_sparse = 32;
+    int dim_sparse = 16;
+    cout << "dim sparse = " << dim_sparse << endl;
 
     if (spec_dim > 0)
     {

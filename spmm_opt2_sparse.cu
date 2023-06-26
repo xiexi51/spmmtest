@@ -47,7 +47,7 @@ void SPMM_OPT2_SPARSE::run(int dim)
 double SPMM_OPT2_SPARSE::do_test(bool timing, int dim)
 {
     this->num_warps = cuda_read_array(&this->_warp4, "/home/xix22010/py_projects/graph_preprocess/warp_4/" + this->_graph + ".warp4") / 4;
-    int block_num = (num_warps + WARPS_PER_BLOCK - 1) / WARPS_PER_BLOCK;
+    int block_num = (num_warps + (WARPS_PER_BLOCK * 32 / dim_sparse) - 1) / (WARPS_PER_BLOCK * 32 / dim_sparse);
     if (!timing)
     {
         cout << "block num = " << block_num << endl;
