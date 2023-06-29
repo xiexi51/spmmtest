@@ -52,10 +52,10 @@ double check_err(float *out, float *out_ref, int len, bool &has_err)
     return err_sum;
 }
 
-void test_graph(string graph, int spec_dim)
+void test_graph(string graph, int spec_dim, int dim_sparse)
 {
     int dim_min = 256, dim_max = 256, interval = 1;
-    int dim_sparse = 4;
+
     cout << "dim sparse = " << dim_sparse << endl;
 
     if (spec_dim > 0)
@@ -80,7 +80,7 @@ void test_graph(string graph, int spec_dim)
     cudaMallocManaged(&cu_vin_sparse, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vin_sparse_data, v_num * dim_sparse * sizeof(float));
     cudaMallocManaged(&cu_vin_sparse_selector, v_num * dim_sparse * sizeof(int));
-    
+
     cudaMallocManaged(&cu_vout2_sparse, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout2_sparse_shared, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout2_sparse_v3, v_num * dim_max * sizeof(float));
@@ -123,30 +123,53 @@ void test_graph(string graph, int spec_dim)
     }
 
     vector<int> sequence(dim_max);
-    iota(sequence.begin(), sequence.end(), 0);  // Fill with 0, 1, ..., dim_max - 1
+    iota(sequence.begin(), sequence.end(), 0); // Fill with 0, 1, ..., dim_max - 1
 
     vector<int> sample(dim_sparse);
 
-    for (int i = 0; i < v_num; ++i) {
+    int cnt = 1;
+    for (int i = 0; i < v_num; ++i)
+    {
         std::sample(sequence.begin(), sequence.end(), sample.begin(), dim_sparse, engine);
 
-        for (int j = 0; j < dim_sparse; ++j) {
-            cu_vin_sparse_data[i * dim_sparse + j] = rd(engine);
+        for (int j = 0; j < dim_sparse; ++j)
+        {
+            float v = rd(engine);
+            // float v = cnt++ * 0.01;
+            cu_vin_sparse_data[i * dim_sparse + j] = v;
             cu_vin_sparse_selector[i * dim_sparse + j] = sample[j];
         }
     }
 
-    for (int i = 0; i < v_num; ++i) {
-        for (int j = 0; j < dim_max; ++j) {
+    for (int i = 0; i < v_num; ++i)
+    {
+        for (int j = 0; j < dim_max; ++j)
+        {
             cu_vin_sparse[i * dim_max + j] = 0.0;
         }
-        for (int j = 0; j < dim_sparse; ++j) {
+        for (int j = 0; j < dim_sparse; ++j)
+        {
             int col = cu_vin_sparse_selector[i * dim_sparse + j];
             cu_vin_sparse[i * dim_max + col] = cu_vin_sparse_data[i * dim_sparse + j];
         }
     }
 
-    fill(cu_vout2, cu_vout_ref + v_num * dim_max, 0);
+    // for(int i = 0; i < 200; i++){
+    //     cout<<cu_vin_sparse_data[i]<<" ";
+    // }
+    // cout<<endl<<endl;
+
+    // for(int i = 0; i < 200; i++){
+    //     cout<<cu_vin_sparse_selector[i]<<" ";
+    // }
+    // cout<<endl<<endl;
+
+    // for(int i = 0; i < 200; i++){
+    //     cout<<cu_vin_sparse[i]<<" ";
+    // }
+    // cout<<endl<<endl;
+
+    fill(cu_vout2, cu_vout2 + v_num * dim_max, 0);
     fill(cu_vout_ref, cu_vout_ref + v_num * dim_max, 0);
     fill(cu_vout2_sparse, cu_vout2_sparse + v_num * dim_max, 0);
     fill(cu_vout2_sparse_shared, cu_vout2_sparse_shared + v_num * dim_max, 0);
@@ -165,6 +188,15 @@ void test_graph(string graph, int spec_dim)
     SPMM_OPT2_SPARSE_V3 opt2_sparse_v3(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse_data, cu_vout2_sparse_v3, v_num, e_num, dim_max);
     opt2_sparse_v3.vin_sparse_selector = cu_vin_sparse_selector;
     opt2_sparse_v3.dim_sparse = dim_sparse;
+
+    // for(int i = 0; i < 100; i++){
+    //         cout << cu_vin_sparse_data[i] << " ";
+    //     }
+    //     cout<<endl<<endl;
+    //     for(int i = 0; i < 100; i++){
+    //         cout << cu_vin_sparse_selector[i] << " ";
+    //     }
+    //     cout<<endl<<endl;
 
 #define CHECK
 #define TIMING
@@ -186,6 +218,11 @@ void test_graph(string graph, int spec_dim)
         cout << "checking opt2" << endl;
         check_err(cu_vout2, cu_vout_ref, v_num * dim, has_err);
 
+        // for(int i = 0; i < 600; i++){
+        //     cout << cu_vout2[i] << " ";
+        // }
+        // cout << endl << endl;
+
         cout << "checking opt2_sparse" << endl;
         check_err(cu_vout2_sparse, cu_vout_ref, v_num * dim, has_err);
 
@@ -194,6 +231,11 @@ void test_graph(string graph, int spec_dim)
 
         cout << "checking opt2_sparse_v3" << endl;
         check_err(cu_vout2_sparse_v3, cu_vout_ref, v_num * dim, has_err);
+
+        // for(int i = 0; i < 600; i++){
+        //     cout << cu_vout2_sparse_v3[i] << " ";
+        // }
+        // cout << endl << endl;
 
 #endif
 
@@ -234,12 +276,13 @@ void test_graph(string graph, int spec_dim)
 
 int main(int argc, char *argv[])
 {
-    if (argc > 2)
+    if (argc > 3)
     {
         string arg_graph(argv[1]);
         int dim = atoi(argv[2]);
+        int dim_sparse = atoi(argv[3]);
         cout << "dir = " << base_dir << endl;
-        test_graph(arg_graph, dim);
+        test_graph(arg_graph, dim, dim_sparse);
     }
     else
     {
@@ -267,7 +310,7 @@ int main(int argc, char *argv[])
                 // {
                 //     continue;
                 // }
-                test_graph(graph, 0);
+                test_graph(graph, 0, 32);
                 cudaDeviceSynchronize();
             }
         }
