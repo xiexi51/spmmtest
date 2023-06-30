@@ -23,9 +23,14 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
     const int laneid = threadIdx.x % EXT_WARP_DIM;
     const int wid = threadIdx.x / EXT_WARP_DIM;
 
-    const int sparse_wid = wid * (EXT_WARP_DIM / dim_sparse) + laneid / dim_sparse;
+    int res_dim_sparse = dim_sparse % 32;
 
-    const int sparse_laneid = laneid % dim_sparse;
+    int res_sparse_wid, res_sparse_laneid;
+    
+    if(res_dim_sparse > 0){
+        res_sparse_wid = wid * (EXT_WARP_DIM / res_dim_sparse) + laneid / res_dim_sparse;
+        res_sparse_laneid = laneid % res_dim_sparse;
+    }
 
     int4 sparse_w_info, w_info;
     int sparse_warp_row, sparse_warp_loc, sparse_warp_len;
@@ -38,9 +43,9 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
         warp_loc = w_info.y;
         warp_len = w_info.z;
 
-        if (sparse_wid < blockDim.x / EXT_WARP_DIM)
+        if (res_dim_sparse > 0 && res_sparse_wid < blockDim.x / EXT_WARP_DIM)
         {
-            sparse_w_info = warp4[blockIdx.x * blockDim.x / EXT_WARP_DIM + sparse_wid];
+            sparse_w_info = warp4[blockIdx.x * blockDim.x / EXT_WARP_DIM + res_sparse_wid];
             sparse_warp_row = sparse_w_info.x;
             sparse_warp_loc = sparse_w_info.y;
             sparse_warp_len = sparse_w_info.z;
@@ -48,16 +53,6 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
     }
 
 #pragma unroll
-    // for (int ext = 0; ext < (feat_in + 31) / 32; ext++)
-    // {
-    //     out_cache[wid * feat_in + laneid + ext * 32] = 0;
-    // }
-
-    // for (int ext = 0; ext < (feat_in + EXT_WARP_DIM - 1) / EXT_WARP_DIM / 2; ext++)
-    // {
-    //     *((double*)out_cache + threadIdx.x + ext * blockDim.x) = 0;
-    // }
-
     for (int ext = 0; ext < (feat_in + EXT_WARP_DIM - 1) / EXT_WARP_DIM; ext++)
     {
         out_cache[threadIdx.x + ext * blockDim.x] = 0;
@@ -66,22 +61,34 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
         return;
 
     __syncthreads();
-    if (sparse_wid < blockDim.x / EXT_WARP_DIM && laneid / dim_sparse < EXT_WARP_DIM / dim_sparse)
+
+    if (res_dim_sparse > 0 && res_sparse_wid < blockDim.x / EXT_WARP_DIM && laneid / res_dim_sparse < EXT_WARP_DIM / res_dim_sparse)
     {
         for (int i = 0; i < sparse_warp_len; i++)
         {
 
             int nz_loc = sparse_warp_loc + i;
             float left_val = __ldg(val + nz_loc);
-            int right_loc = __ldg(idx + nz_loc) * dim_sparse + sparse_laneid;
+            int right_loc = __ldg(idx + nz_loc) * dim_sparse + (dim_sparse / 32) * 32 + res_sparse_laneid;
             float right_val = vin_data[right_loc];
-
-            out_cache[sparse_wid * feat_in + vin_selector[right_loc]] += left_val * right_val;
+            out_cache[res_sparse_wid * feat_in + vin_selector[right_loc]] += left_val * right_val;
 
             //  atomicAdd_block(&out_cache[sparse_wid * feat_in + __ldg(vin_selector + right_loc)], left_val * right_val);
         }
     }
 
+    __syncthreads();
+
+#pragma unroll
+    for (int base = 0; base < dim_sparse / 32; base++){
+        for(int i = 0; i < warp_len; i++){
+            int nz_loc = warp_loc + i;
+            float left_val = __ldg(val + nz_loc);
+            int right_loc = __ldg(idx + nz_loc) * dim_sparse + base * 32 + laneid;
+            float right_val = vin_data[right_loc];
+            out_cache[wid * feat_in + vin_selector[right_loc]] += left_val * right_val;
+        }
+    }
     __syncthreads();
 
 #pragma unroll
