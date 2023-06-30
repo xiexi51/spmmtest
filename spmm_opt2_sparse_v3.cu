@@ -26,8 +26,9 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
     int res_dim_sparse = dim_sparse % 32;
 
     int res_sparse_wid, res_sparse_laneid;
-    
-    if(res_dim_sparse > 0){
+
+    if (res_dim_sparse > 0)
+    {
         res_sparse_wid = wid * (EXT_WARP_DIM / res_dim_sparse) + laneid / res_dim_sparse;
         res_sparse_laneid = laneid % res_dim_sparse;
     }
@@ -69,7 +70,7 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
 
             int nz_loc = sparse_warp_loc + i;
             float left_val = __ldg(val + nz_loc);
-            int right_loc = __ldg(idx + nz_loc) * dim_sparse + (dim_sparse / 32) * 32 + res_sparse_laneid;
+            int right_loc = __ldg(idx + nz_loc) * dim_sparse + res_sparse_laneid;
             float right_val = vin_data[right_loc];
             out_cache[res_sparse_wid * feat_in + vin_selector[right_loc]] += left_val * right_val;
 
@@ -79,17 +80,21 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
 
     __syncthreads();
 
-#pragma unroll
-    for (int base = 0; base < dim_sparse / 32; base++){
-        for(int i = 0; i < warp_len; i++){
-            int nz_loc = warp_loc + i;
-            float left_val = __ldg(val + nz_loc);
-            int right_loc = __ldg(idx + nz_loc) * dim_sparse + base * 32 + laneid;
-            float right_val = vin_data[right_loc];
-            out_cache[wid * feat_in + vin_selector[right_loc]] += left_val * right_val;
+    if (dim_sparse >= 32)
+    {
+        for (int i = 0; i < warp_len; i++)
+        {
+            for (int base = 0; base < dim_sparse / 32; base++)
+            {
+                int nz_loc = warp_loc + i;
+                float left_val = __ldg(val + nz_loc);
+                int right_loc = __ldg(idx + nz_loc) * dim_sparse + res_dim_sparse + base * 32 + laneid;
+                float right_val = vin_data[right_loc];
+                out_cache[wid * feat_in + vin_selector[right_loc]] += left_val * right_val;
+            }
         }
+        __syncthreads();
     }
-    __syncthreads();
 
 #pragma unroll
     for (int ext = 0; ext < (feat_in + EXT_WARP_DIM - 1) / EXT_WARP_DIM; ext++)
