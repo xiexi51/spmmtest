@@ -135,7 +135,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         for (int j = 0; j < dim_sparse; ++j)
         {
             float v = rd(engine);
-            // float v = cnt++ * 0.01;
+            // float v = cnt++ * 0.000001;
             cu_vin_sparse_data[i * dim_sparse + j] = v;
             cu_vin_sparse_selector[i * dim_sparse + j] = sample[j];
         }
@@ -208,7 +208,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 #ifdef CHECK
         spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin_sparse, cu_vout_ref, v_num, e_num, dim, 0);
 
-        // for(int i = 0; i < 100; i++){
+        // for(int i = 0; i < 300; i++){
         //     cout << cu_vout_ref[i] << " ";
         // }
         // cout << endl << endl;
@@ -237,7 +237,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         cout << "checking opt2_sparse_v3" << endl;
         check_err(cu_vout2_sparse_v3, cu_vout_ref, v_num * dim, has_err);
 
-        // for(int i = 0; i < 100; i++){
+        // for(int i = 0; i < 300; i++){
         //     cout << cu_vout2_sparse_v3[i] << " ";
         // }
         // cout << endl << endl;
