@@ -208,31 +208,36 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 #ifdef CHECK
         spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin_sparse, cu_vout_ref, v_num, e_num, dim, 0);
 
-        opt2.do_test(false, dim);
-        opt2_sparse.do_test(false, dim);
-        opt2_sparse_shared.do_test(false, dim);
+        // for(int i = 0; i < 100; i++){
+        //     cout << cu_vout_ref[i] << " ";
+        // }
+        // cout << endl << endl;
+
+        // opt2.do_test(false, dim);
+        // opt2_sparse.do_test(false, dim);
+        // opt2_sparse_shared.do_test(false, dim);
         opt2_sparse_v3.do_test(false, dim);
 
         bool has_err = 0;
 
-        cout << "checking opt2" << endl;
-        check_err(cu_vout2, cu_vout_ref, v_num * dim, has_err);
+        // cout << "checking opt2" << endl;
+        // check_err(cu_vout2, cu_vout_ref, v_num * dim, has_err);
 
         // for(int i = 0; i < 600; i++){
         //     cout << cu_vout2[i] << " ";
         // }
         // cout << endl << endl;
 
-        cout << "checking opt2_sparse" << endl;
-        check_err(cu_vout2_sparse, cu_vout_ref, v_num * dim, has_err);
+        // cout << "checking opt2_sparse" << endl;
+        // check_err(cu_vout2_sparse, cu_vout_ref, v_num * dim, has_err);
 
-        cout << "checking opt2_sparse_shared" << endl;
-        check_err(cu_vout2_sparse_shared, cu_vout_ref, v_num * dim, has_err);
+        // cout << "checking opt2_sparse_shared" << endl;
+        // check_err(cu_vout2_sparse_shared, cu_vout_ref, v_num * dim, has_err);
 
         cout << "checking opt2_sparse_v3" << endl;
         check_err(cu_vout2_sparse_v3, cu_vout_ref, v_num * dim, has_err);
 
-        // for(int i = 0; i < 600; i++){
+        // for(int i = 0; i < 100; i++){
         //     cout << cu_vout2_sparse_v3[i] << " ";
         // }
         // cout << endl << endl;
@@ -245,14 +250,14 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         double t_cusparse = spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin_sparse, cu_vout_ref, v_num, e_num, dim, 10);
         cout << outstr << " cusparse " << t_cusparse * 1000 << endl;
 
-        double t_opt2 = opt2.do_test(true, dim);
-        cout << outstr << " opt2 " << t_opt2 * 1000 << endl;
+        // double t_opt2 = opt2.do_test(true, dim);
+        // cout << outstr << " opt2 " << t_opt2 * 1000 << endl;
 
-        double t_opt2_sparse = opt2_sparse.do_test(true, dim);
-        cout << outstr << " opt2_sparse " << t_opt2_sparse * 1000 << endl;
+        // double t_opt2_sparse = opt2_sparse.do_test(true, dim);
+        // cout << outstr << " opt2_sparse " << t_opt2_sparse * 1000 << endl;
 
-        double t_opt2_sparse_shared = opt2_sparse_shared.do_test(true, dim);
-        cout << outstr << " opt2_sparse_shared " << t_opt2_sparse_shared * 1000 << endl;
+        // double t_opt2_sparse_shared = opt2_sparse_shared.do_test(true, dim);
+        // cout << outstr << " opt2_sparse_shared " << t_opt2_sparse_shared * 1000 << endl;
 
         double t_opt2_sparse_v3 = opt2_sparse_v3.do_test(true, dim);
         cout << outstr << " opt2_sparse_v3 " << t_opt2_sparse_v3 * 1000 << endl;
