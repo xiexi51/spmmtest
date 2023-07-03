@@ -66,6 +66,8 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
             {
 
                 int nz_loc = sparse_warp_loc + i;
+
+                // use gcn style left value ?
                 float left_val = __ldg(val + nz_loc);
                 int right_loc = __ldg(idx + nz_loc) * dim_sparse + sparse_laneid;
                 float right_val = vin_data[right_loc];
