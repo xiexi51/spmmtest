@@ -18,6 +18,9 @@ int total_file_cnt, current_file_cnt;
 
 using namespace std;
 
+#define DIM_MUL_N 1
+#define DIM_MUL(x) ((x + DIM_MUL_N - 1) / DIM_MUL_N) * DIM_MUL_N
+
 double check_err(float *out, float *out_ref, int len, bool &has_err)
 {
     double err_sum = 0;
@@ -79,8 +82,8 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
     cudaMallocManaged(&cu_vout2, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_ref, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vin_sparse, v_num * dim_max * sizeof(float));
-    cudaMallocManaged(&cu_vin_sparse_data, v_num * dim_sparse * sizeof(float));
-    cudaMallocManaged(&cu_vin_sparse_selector, v_num * dim_sparse * sizeof(int));
+    cudaMallocManaged(&cu_vin_sparse_data, v_num * DIM_MUL(dim_sparse) * sizeof(float));
+    cudaMallocManaged(&cu_vin_sparse_selector, v_num * DIM_MUL(dim_sparse) * sizeof(int));
 
     cudaMallocManaged(&cu_vout2_sparse, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout2_sparse_shared, v_num * dim_max * sizeof(float));
@@ -138,8 +141,8 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         {
             float v = rd(engine);
             // float v = cnt++ * 0.000001;
-            cu_vin_sparse_data[i * dim_sparse + j] = v;
-            cu_vin_sparse_selector[i * dim_sparse + j] = sample[j];
+            cu_vin_sparse_data[i * DIM_MUL(dim_sparse) + j] = v;
+            cu_vin_sparse_selector[i * DIM_MUL(dim_sparse) + j] = sample[j];
         }
     }
 
@@ -151,8 +154,8 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         }
         for (int j = 0; j < dim_sparse; ++j)
         {
-            int col = cu_vin_sparse_selector[i * dim_sparse + j];
-            cu_vin_sparse[i * dim_max + col] = cu_vin_sparse_data[i * dim_sparse + j];
+            int col = cu_vin_sparse_selector[i * DIM_MUL(dim_sparse) + j];
+            cu_vin_sparse[i * dim_max + col] = cu_vin_sparse_data[i * DIM_MUL(dim_sparse) + j];
         }
     }
 
@@ -226,10 +229,10 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         opt2_sparse_v3.do_test(false, dim);
 
         opt2_sparse_backward.do_test(false, dim);
-        for(int i = 0; i < 100; i++){
-            cout << cu_vout2_sparse_backward[i] << " ";
-        }
-        cout << endl << endl;
+        // for(int i = 0; i < 100; i++){
+        //     cout << cu_vout2_sparse_backward[i] << " ";
+        // }
+        // cout << endl << endl;
 
 
         bool has_err = 0;

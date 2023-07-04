@@ -11,7 +11,8 @@ extern string base_dir, graph;
 const int WARPS_PER_BLOCK = 12;
 const int EXT_WARP_DIM = 32;
 
-// #define DIM_MUL(x) ((x + 31) / 32) * 32
+#define DIM_MUL_N 1
+#define DIM_MUL(x) ((x + DIM_MUL_N - 1) / DIM_MUL_N) * DIM_MUL_N
 
 __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, const float *val, const float *vin_data, const int *vin_selector, float *vout, const int num_v, const int num_e, const int feat_in, const int dim_sparse, const int num_warps)
 {
@@ -69,7 +70,7 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
 
                 // use gcn style left value ?
                 float left_val = __ldg(val + nz_loc);
-                int right_loc = __ldg(idx + nz_loc) * dim_sparse + sparse_laneid;
+                int right_loc = __ldg(idx + nz_loc) * DIM_MUL(dim_sparse) + sparse_laneid;
                 float right_val = vin_data[right_loc];
 
                 out_cache[sparse_wid * feat_in + vin_selector[right_loc]] += left_val * right_val;
@@ -87,7 +88,7 @@ __global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, co
             {
                 int nz_loc = warp_loc + i;
                 float left_val = __ldg(val + nz_loc);
-                int right_loc = __ldg(idx + nz_loc) * dim_sparse + l;
+                int right_loc = __ldg(idx + nz_loc) * DIM_MUL(dim_sparse) + l;
                 float right_val = vin_data[right_loc];
                 out_cache[wid * feat_in + vin_selector[right_loc]] += left_val * right_val;
                 // atomicAdd_block(&out_cache[wid * feat_in + __ldg(vin_selector + right_loc)], left_val * right_val);       
