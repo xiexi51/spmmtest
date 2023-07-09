@@ -4,7 +4,7 @@
 #include "spmm_opt2_sparse.h"
 #include "spmm_opt2_sparse_shared.h"
 #include "spmm_opt2_sparse_v3.h"
-#include "spmm_opt2_sparse_backward.h"
+#include "spmm_opt2_sparse_backward_v3.h"
 #include "spmm_cusparse.h"
 #include <random>
 #include <algorithm>
@@ -76,19 +76,22 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
     float *cu_val;
     cudaMallocManaged(&cu_val, e_num * sizeof(float));
 
-    float *cu_vout2, *cu_vout_ref;
+    float *cu_vout2, *cu_vout_ref, *cu_vout_ref_to_backward;
     float *cu_vin_sparse, *cu_vin_sparse_data, *cu_vout2_sparse, *cu_vout2_sparse_shared, *cu_vout2_sparse_v3, *cu_vout2_sparse_backward;
     int *cu_vin_sparse_selector;
     cudaMallocManaged(&cu_vout2, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_ref, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vin_sparse, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vin_sparse_data, v_num * DIM_MUL(dim_sparse) * sizeof(float));
+    cudaMallocManaged(&cu_vout_ref_to_backward, v_num * DIM_MUL(dim_sparse) * sizeof(float));
+    cudaMallocManaged(&cu_vout2_sparse_backward, v_num * DIM_MUL(dim_sparse) * sizeof(float));
+
     cudaMallocManaged(&cu_vin_sparse_selector, v_num * DIM_MUL(dim_sparse) * sizeof(int));
 
     cudaMallocManaged(&cu_vout2_sparse, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout2_sparse_shared, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout2_sparse_v3, v_num * dim_max * sizeof(float));
-    cudaMallocManaged(&cu_vout2_sparse_backward, v_num * dim_max * sizeof(float));
+    
 
     default_random_engine engine;
     engine.seed(123);
@@ -140,7 +143,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         for (int j = 0; j < dim_sparse; ++j)
         {
             float v = rd(engine);
-            // float v = cnt++ * 0.000001;
+            // float v = cnt++ * 0.01;
             cu_vin_sparse_data[i * DIM_MUL(dim_sparse) + j] = v;
             cu_vin_sparse_selector[i * DIM_MUL(dim_sparse) + j] = sample[j];
         }
@@ -179,7 +182,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
     fill(cu_vout2_sparse, cu_vout2_sparse + v_num * dim_max, 0);
     fill(cu_vout2_sparse_shared, cu_vout2_sparse_shared + v_num * dim_max, 0);
     fill(cu_vout2_sparse_v3, cu_vout2_sparse_v3 + v_num * dim_max, 0);
-    fill(cu_vout2_sparse_backward, cu_vout2_sparse_backward + v_num * dim_max, 0);
+    fill(cu_vout2_sparse_backward, cu_vout2_sparse_backward + v_num * dim_sparse, 0);
 
     SPMM_OPT2 opt2(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse, cu_vout2, v_num, e_num, dim_max);
 
@@ -195,9 +198,9 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
     opt2_sparse_v3.vin_sparse_selector = cu_vin_sparse_selector;
     opt2_sparse_v3.dim_sparse = dim_sparse;
 
-    SPMM_OPT2_SPARSE_BACKWARD opt2_sparse_backward(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse, cu_vout2_sparse_backward, v_num, e_num, dim_max);
-    opt2_sparse_backward.vin_sparse_selector = cu_vin_sparse_selector;
-    opt2_sparse_backward.dim_sparse = dim_sparse;
+    SPMM_OPT2_SPARSE_BACKWARD_V3 opt2_sparse_backward_v3(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse, cu_vout2_sparse_backward, v_num, e_num, dim_max);
+    opt2_sparse_backward_v3.vin_sparse_selector = cu_vin_sparse_selector;
+    opt2_sparse_backward_v3.dim_sparse = dim_sparse;
 
     // for(int i = 0; i < 100; i++){
     //         cout << cu_vin_sparse_data[i] << " ";
@@ -218,8 +221,15 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 #ifdef CHECK
         spmm_cusparse(cu_indptr, cu_indices, cu_val, cu_vin_sparse, cu_vout_ref, v_num, e_num, dim, 0);
 
-        // for(int i = 0; i < 300; i++){
-        //     cout << cu_vout_ref[i] << " ";
+        for(int i = 0; i < v_num; i++){
+            for(int j = 0; j < dim_sparse; j++){
+                cu_vout_ref_to_backward[i * dim_sparse + j] = cu_vout_ref[i * dim_max + cu_vin_sparse_selector[i * dim_sparse + j]];
+            }
+        }
+
+
+        // for(int i = 0; i < 100; i++){
+        //     cout << cu_vout_ref_to_backward[i] << " ";
         // }
         // cout << endl << endl;
 
@@ -228,9 +238,15 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         // opt2_sparse_shared.do_test(false, dim);
         opt2_sparse_v3.do_test(false, dim);
 
-        opt2_sparse_backward.do_test(false, dim);
+        opt2_sparse_backward_v3.do_test(false, dim);
+        
         // for(int i = 0; i < 100; i++){
         //     cout << cu_vout2_sparse_backward[i] << " ";
+        // }
+        // cout << endl << endl;
+
+        // for(int i = 0; i < 100; i++){
+        //     cout << cu_vout2_sparse_backward[i] - cu_vout_ref_to_backward[i] << " ";
         // }
         // cout << endl << endl;
 
@@ -253,6 +269,9 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 
         cout << "checking opt2_sparse_v3" << endl;
         check_err(cu_vout2_sparse_v3, cu_vout_ref, v_num * dim, has_err);
+
+        cout << "checking opt2_sparse_backward_v3" << endl;
+        check_err(cu_vout2_sparse_backward, cu_vout_ref_to_backward, v_num * dim_sparse, has_err);
 
         // for(int i = 0; i < 300; i++){
         //     cout << cu_vout2_sparse_v3[i] << " ";
@@ -279,8 +298,8 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         double t_opt2_sparse_v3 = opt2_sparse_v3.do_test(true, dim);
         cout << outstr << " opt2_sparse_v3 " << t_opt2_sparse_v3 * 1000 << endl;
 
-        double t_opt2_sparse_backward = opt2_sparse_backward.do_test(true, dim);
-        cout << outstr << " opt2_sparse_backward " << t_opt2_sparse_backward * 1000 << endl;
+        double t_opt2_sparse_backward_v3 = opt2_sparse_backward_v3.do_test(true, dim);
+        cout << outstr << " opt2_sparse_backward_v3 " << t_opt2_sparse_backward_v3 * 1000 << endl;
 
 #endif
     }
@@ -290,6 +309,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
     cudaFree(cu_val);
     cudaFree(cu_vout2);
     cudaFree(cu_vout_ref);
+    cudaFree(cu_vout_ref_to_backward);
 
     cudaFree(cu_vin_sparse);
     cudaFree(cu_vin_sparse_data);
