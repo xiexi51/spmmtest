@@ -228,10 +228,10 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
         }
 
 
-        // for(int i = 0; i < 100; i++){
-        //     cout << cu_vout_ref_to_backward[i] << " ";
-        // }
-        // cout << endl << endl;
+        for(int i = 0; i < 100; i++){
+            cout << cu_vout_ref_to_backward[i] << " ";
+        }
+        cout << endl << endl;
 
         // opt2.do_test(false, dim);
         // opt2_sparse.do_test(false, dim);
@@ -240,15 +240,15 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 
         opt2_sparse_backward_v3.do_test(false, dim);
         
-        // for(int i = 0; i < 100; i++){
-        //     cout << cu_vout2_sparse_backward[i] << " ";
-        // }
-        // cout << endl << endl;
+        for(int i = 0; i < 100; i++){
+            cout << cu_vout2_sparse_backward[i] << " ";
+        }
+        cout << endl << endl;
 
-        // for(int i = 0; i < 100; i++){
-        //     cout << cu_vout2_sparse_backward[i] - cu_vout_ref_to_backward[i] << " ";
-        // }
-        // cout << endl << endl;
+        for(int i = 0; i < 100; i++){
+            cout << cu_vout2_sparse_backward[i] - cu_vout_ref_to_backward[i] << " ";
+        }
+        cout << endl << endl;
 
 
         bool has_err = 0;
