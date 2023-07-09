@@ -9,7 +9,7 @@ using namespace std;
 
 extern string base_dir, graph;
 
-const int WARPS_PER_BLOCK = 8;
+const int WARPS_PER_BLOCK = 12;
 const int EXT_WARP_DIM = 32;
 
 __global__ void spmm_kernel_opt2_sparse_backward(const int *_warp4, const int *idx, const float *val, const float *vin_data, const int *vin_selector, float *vout, const int num_v, const int num_e, const int feat_in, const int dim_sparse, const int num_warps)
@@ -62,8 +62,8 @@ __global__ void spmm_kernel_opt2_sparse_backward(const int *_warp4, const int *i
     // }
 
 #define ROW_ACCUM
-#define WRITE_DIRECT
-//#define COL_WISE
+// #define WRITE_DIRECT
+// #define COL_WISE
 
 
 #if 1
@@ -157,18 +157,85 @@ __global__ void spmm_kernel_opt2_sparse_backward(const int *_warp4, const int *i
     }
     else
     {
+#ifdef ROW_ACCUM
+#ifdef WRITE_DIRECT
+        // float tmp_arr[10] = {0};
+        // for (int i = 0; i < warp_len; i++)
+        // {
+        //     int n = 0;
+        //     for (int l = laneid; l < dim_sparse; l += 32, n++)
+        //     {
+        //         int selector_loc = vin_selector[warp_row * dim_sparse + l];
+        //         int nz_loc = warp_loc + i;
+        //         // float left_val = __ldg(val + nz_loc);
+        //         int right_loc = __ldg(idx + nz_loc) * feat_in + selector_loc;
+        //         float right_val = vin_data[right_loc];
+                
+        //         tmp_arr[n] += right_val;
+        //     }
+        // }
+        // int n = 0;
+        // for (int l = laneid; l < dim_sparse; l += 32, n++){
+        //     int selector_loc = vin_selector[warp_row * dim_sparse + l];
+        //     atomicAdd(&vout[warp_row * feat_in + selector_loc], tmp_arr[n]);
+        // }
+
+        
+        for (int l = laneid; l < dim_sparse; l += 32){
+            float tmp = 0;
+
+            int selector_loc = vin_selector[warp_row * dim_sparse + l];
+
+            for (int i = 0; i < warp_len; i++)
+            {   
+                int nz_loc = warp_loc + i;
+                // float left_val = __ldg(val + nz_loc);
+                int right_loc = __ldg(idx + nz_loc) * feat_in + selector_loc;
+                float right_val = vin_data[right_loc];
+                
+                tmp += right_val;
+                
+            }
+            atomicAdd(&vout[warp_row * feat_in + selector_loc], tmp);
+        }
+        
+        
+
+#else
         for (int i = 0; i < warp_len; i++)
         {
             for (int l = laneid; l < dim_sparse; l += 32)
             {
-                int selector_loc = warp_row * dim_sparse + l;
+                int selector_loc = vin_selector[warp_row * dim_sparse + l];
                 int nz_loc = warp_loc + i;
-                float left_val = __ldg(val + nz_loc);
-                int right_loc = __ldg(idx + nz_loc) * feat_in + vin_selector[selector_loc];
+                // float left_val = __ldg(val + nz_loc);
+                int right_loc = __ldg(idx + nz_loc) * feat_in + selector_loc;
                 float right_val = vin_data[right_loc];
-                out_cache[wid * feat_in + vin_selector[selector_loc]] += left_val * right_val;
+                // out_cache[wid * feat_in + selector_loc] += left_val * right_val;
+                out_cache[wid * feat_in + selector_loc] += right_val;
             }
         }
+
+
+        // for (int l = laneid; l < dim_sparse; l += 32)
+        // {
+        //     int selector_loc = vin_selector[warp_row * dim_sparse + l];
+        //     int tmp = 0;
+        //     for (int i = 0; i < warp_len; i++)
+        //     {
+    
+        //         int nz_loc = warp_loc + i;
+        //         // float left_val = __ldg(val + nz_loc);
+        //         int right_loc = __ldg(idx + nz_loc) * feat_in + selector_loc;
+        //         float right_val = vin_data[right_loc];
+
+        //         tmp += right_val;
+        //     }
+        //     out_cache[wid * feat_in + selector_loc] += tmp;
+        // }
+#endif
+#endif
+
 
         __syncthreads();
         
@@ -188,7 +255,7 @@ __global__ void spmm_kernel_opt2_sparse_backward(const int *_warp4, const int *i
 
 void SPMM_OPT2_SPARSE_BACKWARD::run(int dim)
 {
-    int shared_size = WARPS_PER_BLOCK * dim * sizeof(float) * 2;
+    int shared_size = WARPS_PER_BLOCK * dim * sizeof(float);
     spmm_kernel_opt2_sparse_backward<<<grid, block, shared_size>>>(_warp4, idx, val, vin, vin_sparse_selector, vout, num_v, num_e, dim, dim_sparse, num_warps);
 }
 
