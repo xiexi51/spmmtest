@@ -78,7 +78,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 
     float *cu_vout2, *cu_vout_ref, *cu_vout_ref_to_backward;
     float *cu_vin_sparse, *cu_vin_sparse_data, *cu_vout2_sparse, *cu_vout2_sparse_shared, *cu_vout2_sparse_v3, *cu_vout2_sparse_backward;
-    int *cu_vin_sparse_selector;
+    int *cu_vin_sparse_selector, *cu_vin_sparse_B;
     cudaMallocManaged(&cu_vout2, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_ref, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vin_sparse, v_num * dim_max * sizeof(float));
@@ -87,6 +87,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
     cudaMallocManaged(&cu_vout2_sparse_backward, v_num * DIM_MUL(dim_sparse) * sizeof(float));
 
     cudaMallocManaged(&cu_vin_sparse_selector, v_num * DIM_MUL(dim_sparse) * sizeof(int));
+    cudaMallocManaged(&cu_vin_sparse_B, 2 * v_num * DIM_MUL(dim_sparse) * sizeof(int));
 
     cudaMallocManaged(&cu_vout2_sparse, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout2_sparse_shared, v_num * dim_max * sizeof(float));
@@ -146,6 +147,9 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
             // float v = cnt++ * 0.01;
             cu_vin_sparse_data[i * DIM_MUL(dim_sparse) + j] = v;
             cu_vin_sparse_selector[i * DIM_MUL(dim_sparse) + j] = sample[j];
+
+            *(reinterpret_cast<float*>(cu_vin_sparse_B) + i * DIM_MUL(dim_sparse)*2 + 2*j) = v;
+            cu_vin_sparse_B[i * DIM_MUL(dim_sparse)*2 + 2*j + 1] = sample[j];
         }
     }
 
@@ -195,7 +199,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
     opt2_sparse_shared.dim_sparse = dim_sparse;
 
     SPMM_OPT2_SPARSE_V3 opt2_sparse_v3(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse_data, cu_vout2_sparse_v3, v_num, e_num, dim_max);
-    opt2_sparse_v3.vin_sparse_selector = cu_vin_sparse_selector;
+    opt2_sparse_v3.vin_sparse_selector = cu_vin_sparse_B;
     opt2_sparse_v3.dim_sparse = dim_sparse;
 
     SPMM_OPT2_SPARSE_BACKWARD_V3 opt2_sparse_backward_v3(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse, cu_vout2_sparse_backward, v_num, e_num, dim_max);
@@ -314,6 +318,8 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
     cudaFree(cu_vin_sparse);
     cudaFree(cu_vin_sparse_data);
     cudaFree(cu_vin_sparse_selector);
+    cudaFree(cu_vin_sparse_B);
+
     cudaFree(cu_vout2_sparse);
     cudaFree(cu_vout2_sparse_shared);
     cudaFree(cu_vout2_sparse_v3);
