@@ -78,7 +78,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 
     float *cu_vout2, *cu_vout_ref, *cu_vout_ref_to_backward;
     float *cu_vin_sparse, *cu_vin_sparse_data, *cu_vout2_sparse, *cu_vout2_sparse_shared, *cu_vout2_sparse_v3, *cu_vout2_sparse_backward;
-    int *cu_vin_sparse_selector;
+    u_int8_t *cu_vin_sparse_selector;
     cudaMallocManaged(&cu_vout2, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout_ref, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vin_sparse, v_num * dim_max * sizeof(float));
@@ -86,7 +86,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
     cudaMallocManaged(&cu_vout_ref_to_backward, v_num * DIM_MUL(dim_sparse) * sizeof(float));
     cudaMallocManaged(&cu_vout2_sparse_backward, v_num * DIM_MUL(dim_sparse) * sizeof(float));
 
-    cudaMallocManaged(&cu_vin_sparse_selector, v_num * DIM_MUL(dim_sparse) * sizeof(int));
+    cudaMallocManaged(&cu_vin_sparse_selector, v_num * DIM_MUL(dim_sparse) * sizeof(u_int8_t));
 
     cudaMallocManaged(&cu_vout2_sparse, v_num * dim_max * sizeof(float));
     cudaMallocManaged(&cu_vout2_sparse_shared, v_num * dim_max * sizeof(float));
@@ -186,13 +186,13 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 
     SPMM_OPT2 opt2(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse, cu_vout2, v_num, e_num, dim_max);
 
-    SPMM_OPT2_SPARSE opt2_sparse(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse_data, cu_vout2_sparse, v_num, e_num, dim_max);
-    opt2_sparse.vin_sparse_selector = cu_vin_sparse_selector;
-    opt2_sparse.dim_sparse = dim_sparse;
+    // SPMM_OPT2_SPARSE opt2_sparse(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse_data, cu_vout2_sparse, v_num, e_num, dim_max);
+    // opt2_sparse.vin_sparse_selector = cu_vin_sparse_selector;
+    // opt2_sparse.dim_sparse = dim_sparse;
 
-    SPMM_OPT2_SPARSE_SHARED opt2_sparse_shared(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse_data, cu_vout2_sparse_shared, v_num, e_num, dim_max);
-    opt2_sparse_shared.vin_sparse_selector = cu_vin_sparse_selector;
-    opt2_sparse_shared.dim_sparse = dim_sparse;
+    // SPMM_OPT2_SPARSE_SHARED opt2_sparse_shared(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse_data, cu_vout2_sparse_shared, v_num, e_num, dim_max);
+    // opt2_sparse_shared.vin_sparse_selector = cu_vin_sparse_selector;
+    // opt2_sparse_shared.dim_sparse = dim_sparse;
 
     SPMM_OPT2_SPARSE_V3 opt2_sparse_v3(graph, cu_indptr, cu_indices, cu_val, cu_vin_sparse_data, cu_vout2_sparse_v3, v_num, e_num, dim_max);
     opt2_sparse_v3.vin_sparse_selector = cu_vin_sparse_selector;

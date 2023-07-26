@@ -14,7 +14,7 @@ const int EXT_WARP_DIM = 32;
 #define DIM_MUL_N 1
 #define DIM_MUL(x) ((x + DIM_MUL_N - 1) / DIM_MUL_N) * DIM_MUL_N
 
-__global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, const float *val, const float *vin_data, const int *vin_selector, float *vout, const int num_v, const int num_e, const int feat_in, const int dim_sparse, const int num_warps)
+__global__ void spmm_kernel_opt2_sparse_v3(const int *_warp4, const int *idx, const float *val, const float *vin_data, const u_int8_t *vin_selector, float *vout, const int num_v, const int num_e, const int feat_in, const int dim_sparse, const int num_warps)
 {
     const int4 *warp4 = reinterpret_cast<const int4 *>(_warp4);
     extern __shared__ float out_cache[];
@@ -114,7 +114,7 @@ void SPMM_OPT2_SPARSE_V3::run(int dim)
 
 double SPMM_OPT2_SPARSE_V3::do_test(bool timing, int dim)
 {
-    this->num_warps = cuda_read_array(&this->_warp4, "/home/xix22010/py_projects/graph_preprocess/warp_4/" + this->_graph + ".warp4") / 4;
+    this->num_warps = cuda_read_array(&this->_warp4, "/home/xix22010/py_projects/graph_preprocess/w" + to_string(WARPS_PER_BLOCK) + "_nz" + "32_warp_4/" + this->_graph + ".warp4") / 4;
     int block_num = (num_warps + WARPS_PER_BLOCK - 1) / WARPS_PER_BLOCK;
     if (!timing)
     {

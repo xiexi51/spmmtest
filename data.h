@@ -1,6 +1,7 @@
 #pragma once
 #include <fstream>
 #include <string>
+#include <iostream>
 using namespace std;
 
 template <typename scalar_t>
@@ -12,6 +13,7 @@ int cuda_read_array(scalar_t **arr, string file)
     input.seekg(0, input.beg);
     int cnt = length / sizeof(scalar_t);
     // *arr = new scalar_t[cnt];
+    cout<<cnt<<endl;
     cudaMallocManaged(arr, cnt * sizeof(scalar_t));
 
     input.read((char *)*arr, length);

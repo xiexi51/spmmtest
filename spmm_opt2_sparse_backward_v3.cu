@@ -12,7 +12,7 @@ extern string base_dir, graph;
 const int WARPS_PER_BLOCK = 12;
 const int EXT_WARP_DIM = 32;
 
-__global__ void spmm_kernel_opt2_sparse_backward_v3(const int *_warp4, const int *idx, const float *val, const float *vin_data, const int *vin_selector, float *vout, const int num_v, const int num_e, const int feat_in, const int dim_sparse, const int num_warps)
+__global__ void spmm_kernel_opt2_sparse_backward_v3(const int *_warp4, const int *idx, const float *val, const float *vin_data, const u_int8_t *vin_selector, float *vout, const int num_v, const int num_e, const int feat_in, const int dim_sparse, const int num_warps)
 {
     extern __shared__ float out_cache[];
 
@@ -69,7 +69,7 @@ __global__ void spmm_kernel_opt2_sparse_backward_v3(const int *_warp4, const int
             for (int i = 0; i < sparse_warp_len; i++)
             {
                 int col_idx = __ldg(idx + sparse_warp_loc + i);
-                int selector_ = __ldg(vin_selector + col_idx * dim_sparse + sparse_laneid);
+                u_int8_t selector_ = __ldg(vin_selector + col_idx * dim_sparse + sparse_laneid);
 
                 // out_cache[(sparse_wid + WARPS_PER_BLOCK) * feat_in + sparse_laneid] = out_cache[(sparse_wid) * feat_in + selector_];
                 
@@ -91,7 +91,7 @@ __global__ void spmm_kernel_opt2_sparse_backward_v3(const int *_warp4, const int
             int col_idx = __ldg(idx + warp_loc + i);
             for (int l = laneid; l < dim_sparse; l += 32){
                 
-                int selector_ = __ldg(vin_selector + col_idx * dim_sparse + l);
+                u_int8_t selector_ = __ldg(vin_selector + col_idx * dim_sparse + l);
 
             //    out_cache[(wid + WARPS_PER_BLOCK) * feat_in + l] = out_cache[wid * feat_in + selector_];
                 

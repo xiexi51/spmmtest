@@ -7,7 +7,7 @@ public:
     using SPMM_BASE::SPMM_BASE;
 
     float *vout_ref;
-    int *vin_sparse_selector;
+    u_int8_t *vin_sparse_selector;
     int dim_sparse;
 
 protected:
