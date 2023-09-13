@@ -98,7 +98,7 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 
     uniform_real_distribution<float> rd(0, 1);
 
-    int input_mode = 3;
+    int input_mode = 1;
     switch (input_mode)
     {
     case 1:
@@ -300,6 +300,8 @@ void test_graph(string graph, int spec_dim, int dim_sparse)
 
         double t_opt2_sparse_backward_v3 = opt2_sparse_backward_v3.do_test(true, dim);
         cout << outstr << " opt2_sparse_backward_v3 " << t_opt2_sparse_backward_v3 * 1000 << endl;
+
+        cout << "efficiency = " << t_cusparse*2 / (t_opt2_sparse_v3+t_opt2_sparse_backward_v3) / (dim/ dim_sparse) << endl;
 
 #endif
     }

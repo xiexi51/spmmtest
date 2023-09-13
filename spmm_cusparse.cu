@@ -20,14 +20,16 @@ double spmm_cusparse(int *ptr, int *idx, float *val, float *vin, float *vout, in
     cusparseCreateCsr(&matA, num_v, num_v, num_e, ptr, idx, val, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
     cusparseCreateDnMat(&matB, num_v, dim, dim, vin, CUDA_R_32F, CUSPARSE_ORDER_ROW);
     cusparseCreateDnMat(&matC, num_v, dim, dim, vout, CUDA_R_32F, CUSPARSE_ORDER_ROW);
+
+    cusparseOperation_t a_transpose = CUSPARSE_OPERATION_NON_TRANSPOSE;
     size_t bufferSize = 0;
-    cusparseSpMM_bufferSize(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, &bufferSize);
+    cusparseSpMM_bufferSize(handle, a_transpose, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, &bufferSize);
     cudaMallocManaged(&buf, bufferSize);
 
     double ret = 0;
     if (times == 0)
     {
-        cusparseSpMM(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, buf);
+        cusparseSpMM(handle, a_transpose, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, buf);
         cudaDeviceSynchronize();
     }
     else
@@ -36,14 +38,14 @@ double spmm_cusparse(int *ptr, int *idx, float *val, float *vin, float *vout, in
         // warmup
         for (int i = 0; i < times; i++)
         {
-            cusparseSpMM(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, buf);
+            cusparseSpMM(handle, a_transpose, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, buf);
         }
         cudaDeviceSynchronize();
         double measured_time = 0;
         for (int i = 0; i < times; i++)
         {
             timestamp(t0);
-            cusparseSpMM(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, buf);
+            cusparseSpMM(handle, a_transpose, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, buf);
             cudaDeviceSynchronize();
             timestamp(t1);
             measured_time += getDuration(t0, t1);

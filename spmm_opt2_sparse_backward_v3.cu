@@ -74,8 +74,10 @@ __global__ void spmm_kernel_opt2_sparse_backward_v3(const int *_warp4, const int
                 // out_cache[(sparse_wid + WARPS_PER_BLOCK) * feat_in + sparse_laneid] = out_cache[(sparse_wid) * feat_in + selector_];
                 
                 // atomicAdd(&vout[col_idx * dim_sparse + sparse_laneid ], out_cache[(sparse_wid + WARPS_PER_BLOCK) * feat_in + sparse_laneid]);
+
+                float left_val = __ldg(val + sparse_warp_loc + i);
                 
-                atomicAdd(&vout[col_idx * dim_sparse + sparse_laneid ], out_cache[(sparse_wid) * feat_in + selector_]);
+                atomicAdd(&vout[col_idx * dim_sparse + sparse_laneid ], left_val * out_cache[(sparse_wid) * feat_in + selector_]);
 
                 //__syncthreads();
             
@@ -89,13 +91,14 @@ __global__ void spmm_kernel_opt2_sparse_backward_v3(const int *_warp4, const int
     {
         for(int i = 0; i < warp_len; i++){
             int col_idx = __ldg(idx + warp_loc + i);
+            float left_val = __ldg(val + warp_loc + i);
             for (int l = laneid; l < dim_sparse; l += 32){
                 
                 u_int8_t selector_ = __ldg(vin_selector + col_idx * dim_sparse + l);
 
             //    out_cache[(wid + WARPS_PER_BLOCK) * feat_in + l] = out_cache[wid * feat_in + selector_];
                 
-                atomicAdd(&vout[col_idx * dim_sparse + l], out_cache[wid * feat_in + selector_]);
+                atomicAdd(&vout[col_idx * dim_sparse + l], left_val * out_cache[wid * feat_in + selector_]);
                 
             }
 
